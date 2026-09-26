@@ -1,0 +1,60 @@
+name: mega_homecare
+description: "Mega Homecare Inc Application"
+publish_to: 'none'
+version: 1.0.0+2
+
+environment:
+  sdk: ^3.10.7
+
+dependencies:
+  cloud_firestore: ^6.6.0
+  firebase_auth: ^6.5.4
+  firebase_core: ^4.11.0
+  flutter:
+    sdk: flutter
+  firebase_messaging: ^16.4.1
+  firebase_storage: ^13.4.3
+  image_picker: ^1.1.2
+  intl: ^0.20.3
+  path_provider: ^2.1.5
+  pdf: ^3.11.2
+  provider: ^6.1.5
+  agora_rtc_engine: ^6.5.0
+  flutter_dotenv: ^6.0.1
+  flutter_local_notifications: ^18.0.1
+  googleapis_auth: ^1.6.0
+  http: ^1.2.2
+  geolocator: ^13.0.2
+  geocoding: ^3.0.0
+  permission_handler: ^11.3.1
+  url_launcher: ^6.3.2
+  file_picker: ^11.0.2
+  cloud_functions: ^6.3.5
+  open_file: ^3.5.11
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+  flutter_launcher_icons: ^0.14.3
+  flutter_native_splash: ^2.4.6
+
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: "assets/app_icon.jpg"
+  min_sdk_android: 21
+
+flutter_native_splash:
+  color: "#F5F7FA"
+  image: assets/app_icon.jpg
+  android_12:
+    color: "#F5F7FA"
+    image: assets/app_icon.jpg
+
+flutter:
+  uses-material-design: true
+  assets:
+    - .env
+    - assets/
+    - service-account.json
