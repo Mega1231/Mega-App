@@ -187,10 +187,6 @@ class AgoraCallService {
     // Send push notification to receiver
     NotificationService().sendPushNotification(
       receiverId: receiverId,
-      title: callerName,
-      body: type == CallType.video
-          ? 'Incoming Video Call'
-          : 'Incoming Audio Call',
       type: 'call',
       callId: callId,
     );

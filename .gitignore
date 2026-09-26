@@ -1,0 +1,4 @@
+service-account.json
+functions/node_modules/
+.dart_tool/
+build/

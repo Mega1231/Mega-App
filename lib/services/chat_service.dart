@@ -168,8 +168,6 @@ class ChatService {
     // Send push notification to receiver
     NotificationService().sendPushNotification(
       receiverId: receiverId,
-      title: senderName,
-      body: text,
       type: 'message',
       chatId: chatId,
     );
@@ -228,8 +226,6 @@ class ChatService {
     // Send push notification to receiver
     NotificationService().sendPushNotification(
       receiverId: receiverId,
-      title: senderName,
-      body: 'Sent a photo',
       type: 'message',
       chatId: chatId,
     );
@@ -411,8 +407,6 @@ class ChatService {
       if (pid != senderId) {
         NotificationService().sendPushNotification(
           receiverId: pid,
-          title: senderName,
-          body: text,
           type: 'message',
           chatId: chatId,
         );
@@ -479,8 +473,6 @@ class ChatService {
       if (pid != senderId) {
         NotificationService().sendPushNotification(
           receiverId: pid,
-          title: senderName,
-          body: 'Sent a photo',
           type: 'message',
           chatId: chatId,
         );

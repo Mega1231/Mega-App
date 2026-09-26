@@ -22,8 +22,6 @@ dependencies:
   agora_rtc_engine: ^6.5.0
   flutter_dotenv: ^6.0.1
   flutter_local_notifications: ^18.0.1
-  googleapis_auth: ^1.6.0
-  http: ^1.2.2
   geolocator: ^13.0.2
   geocoding: ^3.0.0
   permission_handler: ^11.3.1
@@ -57,4 +55,3 @@ flutter:
   assets:
     - .env
     - assets/
-    - service-account.json

@@ -1,10 +1,7 @@
 import 'dart:convert';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
-import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-import 'package:googleapis_auth/auth_io.dart';
-import 'package:http/http.dart' as http;
 
 class NotificationService {
   static final NotificationService _instance = NotificationService._internal();
@@ -13,10 +10,6 @@ class NotificationService {
 
   final FlutterLocalNotificationsPlugin _localNotifications =
       FlutterLocalNotificationsPlugin();
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-
-  // Cached OAuth2 access token for FCM V1 API
-  AccessCredentials? _credentials;
 
   // Callback when user taps a notification
   void Function(String type, String? callId, String? chatId)? onNotificationTap;
@@ -140,98 +133,23 @@ class NotificationService {
     );
   }
 
-  /// Get OAuth2 access token for FCM V1 API using service account
-  Future<String?> _getAccessToken() async {
-    try {
-      // Return cached token if still valid
-      if (_credentials != null &&
-          _credentials!.accessToken.expiry
-              .isAfter(DateTime.now().add(const Duration(minutes: 1)))) {
-        return _credentials!.accessToken.data;
-      }
-
-      final serviceAccountJson =
-          await rootBundle.loadString('service-account.json');
-      final serviceAccount =
-          ServiceAccountCredentials.fromJson(serviceAccountJson);
-
-      final client = http.Client();
-      _credentials = await obtainAccessCredentialsViaServiceAccount(
-        serviceAccount,
-        ['https://www.googleapis.com/auth/firebase.messaging'],
-        client,
-      );
-      client.close();
-
-      return _credentials!.accessToken.data;
-    } catch (_) {
-      return null;
-    }
-  }
-
-  /// Send a push notification using FCM V1 API
+  /// Ask the backend to send a push for a chat message or incoming call.
   Future<void> sendPushNotification({
     required String receiverId,
-    required String title,
-    required String body,
     required String type, // 'call' or 'message'
     String? callId,
     String? chatId,
   }) async {
     try {
-      // Get the receiver's FCM token from Firestore
-      final userDoc =
-          await _firestore.collection('users').doc(receiverId).get();
-      final fcmToken = userDoc.data()?['fcmToken'] as String?;
-      if (fcmToken == null || fcmToken.isEmpty) return;
-
-      final accessToken = await _getAccessToken();
-      if (accessToken == null) return;
-
-      // Get project ID from service account
-      final serviceAccountJson =
-          await rootBundle.loadString('service-account.json');
-      final projectId =
-          jsonDecode(serviceAccountJson)['project_id'] as String;
-
-      await http.post(
-        Uri.parse(
-            'https://fcm.googleapis.com/v1/projects/$projectId/messages:send'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $accessToken',
-        },
-        body: jsonEncode({
-          'message': {
-            'token': fcmToken,
-            'notification': {
-              'title': title,
-              'body': body,
-            },
-            'data': {
-              'type': type,
-              'callId': callId ?? '',
-              'chatId': chatId ?? '',
-            },
-            'android': {
-              'priority': 'HIGH',
-              'notification': {
-                'channel_id':
-                    type == 'call' ? 'calls_channel' : 'messages_channel',
-                'sound': 'default',
-              },
-            },
-            'apns': {
-              'payload': {
-                'aps': {
-                  'sound': 'default',
-                  'badge': 1,
-                },
-              },
-            },
-          },
-        }),
-      );
+      final data = <String, String>{
+        'receiverId': receiverId,
+        'type': type,
+      };
+      if (callId != null) data['callId'] = callId;
+      if (chatId != null) data['chatId'] = chatId;
+      await FirebaseFunctions.instance
+          .httpsCallable('sendPushNotification')
+          .call(data);
     } catch (_) {
       // Silently fail — push notification is best-effort
     }

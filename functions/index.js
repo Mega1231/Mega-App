@@ -57,3 +57,71 @@ exports.resetUserPassword = onCall(async (request) => {
     throw new HttpsError("internal", error.message);
   }
 });
+
+exports.sendPushNotification = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "Must be logged in.");
+  }
+
+  const { receiverId, type, chatId, callId } = request.data || {};
+  if (typeof receiverId !== "string" || !receiverId ||
+      (type !== "message" && type !== "call")) {
+    throw new HttpsError("invalid-argument", "Invalid notification request.");
+  }
+
+  const senderId = request.auth.uid;
+  let title;
+  let body;
+  let data;
+
+  if (type === "message") {
+    if (typeof chatId !== "string" || !chatId) {
+      throw new HttpsError("invalid-argument", "chatId is required.");
+    }
+    const chat = await admin.firestore().collection("chats").doc(chatId).get();
+    const details = chat.data();
+    if (!details || !Array.isArray(details.participants) ||
+        !details.participants.includes(senderId) ||
+        !details.participants.includes(receiverId) ||
+        senderId === receiverId || details.lastMessageSenderId !== senderId) {
+      throw new HttpsError("permission-denied", "Not allowed to notify this chat.");
+    }
+    title = details.participantNames?.[senderId] || "New message";
+    body = details.lastMessageType === "image"
+      ? "Sent a photo" : details.lastMessage || "New message";
+    data = { type, chatId, callId: "" };
+  } else {
+    if (typeof callId !== "string" || !callId) {
+      throw new HttpsError("invalid-argument", "callId is required.");
+    }
+    const call = await admin.firestore().collection("calls").doc(callId).get();
+    const details = call.data();
+    if (!details || details.callerId !== senderId ||
+        details.receiverId !== receiverId || details.status !== "ringing") {
+      throw new HttpsError("permission-denied", "Not allowed to notify this call.");
+    }
+    title = details.callerName || "Incoming call";
+    body = details.type === "video"
+      ? "Incoming Video Call" : "Incoming Audio Call";
+    data = { type, callId, chatId: "" };
+  }
+
+  const user = await admin.firestore().collection("users").doc(receiverId).get();
+  const token = user.data()?.fcmToken;
+  if (typeof token !== "string" || !token) return { sent: false };
+
+  await admin.messaging().send({
+    token,
+    notification: { title: String(title), body: String(body) },
+    data,
+    android: {
+      priority: "high",
+      notification: {
+        channelId: type === "call" ? "calls_channel" : "messages_channel",
+        sound: "default",
+      },
+    },
+    apns: { payload: { aps: { sound: "default", badge: 1 } } },
+  });
+  return { sent: true };
+});
