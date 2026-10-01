@@ -12,11 +12,15 @@ class CaregiverHomeViewModel extends ChangeNotifier {
   List<Assignment> _assignments = [];
   // clientId → AppUser (for address/phone)
   final Map<String, AppUser> _clientProfiles = {};
+  // clientId → active family members of that client
+  final Map<String, List<AppUser>> _familyMembers = {};
 
   bool get isLoading => _isLoading;
   List<Assignment> get assignments => _assignments;
   int get clientCount => _assignments.length;
   Map<String, AppUser> get clientProfiles => _clientProfiles;
+  List<AppUser> familyMembersOf(String clientId) =>
+      _familyMembers[clientId] ?? const [];
 
   CaregiverHomeViewModel({required this.caregiverId});
 
@@ -41,6 +45,17 @@ class CaregiverHomeViewModel extends ChangeNotifier {
         }
       }
       await Future.wait(futures);
+
+      await Future.wait(_clientProfiles.entries
+          .where((e) => !_familyMembers.containsKey(e.key))
+          .map((e) async {
+        final members = await Future.wait(
+            e.value.familyMemberIds.map(_service.getClientProfile));
+        _familyMembers[e.key] = members
+            .whereType<AppUser>()
+            .where((m) => m.isActive)
+            .toList();
+      }));
     } catch (e) {
       debugPrint('CaregiverHomeViewModel loadData error: $e');
     }
@@ -51,6 +66,7 @@ class CaregiverHomeViewModel extends ChangeNotifier {
 
   Future<void> refresh() async {
     _clientProfiles.clear();
+    _familyMembers.clear();
     await loadData();
   }
 

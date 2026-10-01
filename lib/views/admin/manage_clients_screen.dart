@@ -9,6 +9,7 @@ import '../../theme/app_theme.dart';
 import '../../viewmodels/manage_users_viewmodel.dart';
 import '../../widgets/custom_loader.dart';
 import '../../widgets/custom_snackbar.dart';
+import '../client/client_reports_screen.dart';
 import 'create_user_screen.dart';
 
 class ManageClientsScreen extends StatelessWidget {
@@ -612,6 +613,39 @@ class _UserCardState extends State<_UserCard> {
                 icon: const Icon(Icons.edit, size: 18),
                 label: const Text(
                   'Edit Profile',
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                ),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppTheme.primaryColor,
+                  side: BorderSide(
+                    color: AppTheme.primaryColor.withValues(alpha: 0.3),
+                  ),
+                  backgroundColor:
+                      AppTheme.primaryColor.withValues(alpha: 0.04),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                ),
+              ),
+            ),
+            const SizedBox(height: 10),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => ClientReportsScreen(
+                      clientId: user.uid,
+                      title: '${user.fullName} – Shift Reports',
+                      showBackButton: true,
+                    ),
+                  ),
+                ),
+                icon: const Icon(Icons.summarize, size: 18),
+                label: const Text(
+                  'Shift Reports',
                   style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
                 ),
                 style: OutlinedButton.styleFrom(

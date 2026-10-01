@@ -17,6 +17,7 @@ import 'caregiver_schedule_screen.dart';
 import 'caregiver_chat_screen.dart';
 import 'caregiver_reports_screen.dart';
 import 'create_report_screen.dart';
+import '../client/client_reports_screen.dart';
 import '../common/call_screen.dart';
 import '../common/chat_screen.dart';
 import '../common/profile_screen.dart';
@@ -371,6 +372,7 @@ class _CaregiverHomeState extends State<_CaregiverHome> {
                         (a) => _ClientTile(
                           assignment: a,
                           clientProfile: vm.clientProfiles[a.clientId],
+                          familyMembers: vm.familyMembersOf(a.clientId),
                         ),
                       ),
                       const SizedBox(height: 24),
@@ -779,8 +781,13 @@ class _ClientVisitCard extends StatelessWidget {
 class _ClientTile extends StatelessWidget {
   final Assignment assignment;
   final AppUser? clientProfile;
+  final List<AppUser> familyMembers;
 
-  const _ClientTile({required this.assignment, this.clientProfile});
+  const _ClientTile({
+    required this.assignment,
+    this.clientProfile,
+    this.familyMembers = const [],
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -914,6 +921,39 @@ class _ClientTile extends StatelessWidget {
               ),
             ),
           ],
+          const SizedBox(height: 10),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => ClientReportsScreen(
+                    clientId: assignment.clientId,
+                    title: '${assignment.clientName} – Care Notes',
+                    showBackButton: true,
+                    emptyMessage:
+                        'No notes yet.\nReports from all caregivers of this client will appear here.',
+                  ),
+                ),
+              ),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppTheme.primaryColor,
+                side: BorderSide(
+                  color: AppTheme.primaryColor.withValues(alpha: 0.3),
+                ),
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+              icon: const Icon(Icons.history_edu, size: 16),
+              label: const Text(
+                'Care Notes (all caregivers)',
+                style: TextStyle(fontSize: 12),
+              ),
+            ),
+          ),
           if (currentUser != null) ...[
             const SizedBox(height: 12),
             Row(
@@ -992,6 +1032,30 @@ class _ClientTile extends StatelessWidget {
                 ),
               ],
             ),
+            if (familyMembers.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              Divider(height: 1, color: Colors.grey.withValues(alpha: 0.15)),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  Icon(Icons.family_restroom,
+                      size: 14,
+                      color: AppTheme.textSecondary.withValues(alpha: 0.7)),
+                  const SizedBox(width: 6),
+                  const Text(
+                    'Family Members',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: AppTheme.textSecondary,
+                    ),
+                  ),
+                ],
+              ),
+              ...familyMembers.map(
+                (m) => _FamilyContactRow(member: m, currentUser: currentUser),
+              ),
+            ],
           ],
         ],
       ),
@@ -1024,6 +1088,91 @@ class _ClientTile extends StatelessWidget {
         ),
       );
     }
+  }
+}
+
+class _FamilyContactRow extends StatelessWidget {
+  final AppUser member;
+  final AppUser currentUser;
+
+  const _FamilyContactRow({required this.member, required this.currentUser});
+
+  void _push(BuildContext context, Widget screen) {
+    Navigator.push(context, MaterialPageRoute(builder: (_) => screen));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: Row(
+        children: [
+          CircleAvatar(
+            radius: 16,
+            backgroundColor: const Color(0xFFE67E22).withValues(alpha: 0.1),
+            backgroundImage: member.photoUrl.isNotEmpty
+                ? NetworkImage(member.photoUrl)
+                : null,
+            child: member.photoUrl.isEmpty
+                ? Text(
+                    member.fullName.isNotEmpty
+                        ? member.fullName[0].toUpperCase()
+                        : '?',
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFFE67E22),
+                    ),
+                  )
+                : null,
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              member.fullName,
+              style: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+                color: AppTheme.textPrimary,
+              ),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          IconButton(
+            tooltip: 'Chat',
+            icon: const Icon(Icons.chat, color: AppTheme.primaryColor),
+            onPressed: () => _push(
+              context,
+              ChatScreen(currentUser: currentUser, otherUser: member),
+            ),
+          ),
+          IconButton(
+            tooltip: 'Call',
+            icon: const Icon(Icons.call, color: AppTheme.successColor),
+            onPressed: () => _push(
+              context,
+              CallScreen(
+                currentUser: currentUser,
+                otherUser: member,
+                callType: CallType.audio,
+              ),
+            ),
+          ),
+          IconButton(
+            tooltip: 'Video',
+            icon: const Icon(Icons.videocam, color: AppTheme.warningColor),
+            onPressed: () => _push(
+              context,
+              CallScreen(
+                currentUser: currentUser,
+                otherUser: member,
+                callType: CallType.video,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 

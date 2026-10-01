@@ -8,8 +8,18 @@ class ClientReportsScreen extends StatefulWidget {
   /// If provided, load reports for this client. Otherwise uses the current
   /// user's UID (i.e. the logged-in client themselves).
   final String? clientId;
+  final String title;
+  final bool showBackButton;
+  final String emptyMessage;
 
-  const ClientReportsScreen({super.key, this.clientId});
+  const ClientReportsScreen({
+    super.key,
+    this.clientId,
+    this.title = 'Care Reports',
+    this.showBackButton = false,
+    this.emptyMessage =
+        'No care reports yet.\nReports from your caregiver will appear here.',
+  });
 
   @override
   State<ClientReportsScreen> createState() => _ClientReportsScreenState();
@@ -42,11 +52,11 @@ class _ClientReportsScreenState extends State<ClientReportsScreen> {
       value: _reportVm,
       child: Scaffold(
         appBar: AppBar(
-          title: const Text('Care Reports'),
-          automaticallyImplyLeading: false,
+          title: Text(widget.title),
+          automaticallyImplyLeading: widget.showBackButton,
         ),
         body: ReportListWidget(
-          emptyMessage: 'No care reports yet.\nReports from your caregiver will appear here.',
+          emptyMessage: widget.emptyMessage,
           onLoadMore: () => _reportVm.loadMoreClientReports(_clientId),
         ),
       ),
