@@ -372,7 +372,7 @@ class _CreateReportScreenState extends State<CreateReportScreen> {
       final String startTimeStr;
       final String endTimeStr;
       if (_isLiveIn) {
-        startTimeStr = 'Live-in (8 hrs)';
+        startTimeStr = 'Live-in';
         endTimeStr = '';
       } else {
         startTimeStr = _startTime.format(context);
@@ -456,10 +456,6 @@ class _CreateReportScreenState extends State<CreateReportScreen> {
                   fontWeight: FontWeight.w600,
                   color: AppTheme.textPrimary,
                 ),
-              ),
-              subtitle: const Text(
-                'Auto-records 8 hours',
-                style: TextStyle(fontSize: 13, color: AppTheme.textSecondary),
               ),
               controlAffinity: ListTileControlAffinity.leading,
               contentPadding: EdgeInsets.zero,

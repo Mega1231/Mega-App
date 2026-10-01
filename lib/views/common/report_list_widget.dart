@@ -10,12 +10,73 @@ import 'report_detail_screen.dart';
 class ReportListWidget extends StatelessWidget {
   final String emptyMessage;
   final VoidCallback? onLoadMore;
+  // Reports arrive sorted by visitDate desc, so headers go where the day changes.
+  final bool groupByDay;
 
   const ReportListWidget({
     super.key,
     this.emptyMessage = 'No reports yet',
     this.onLoadMore,
+    this.groupByDay = false,
   });
+
+  static bool _sameDay(DateTime a, DateTime b) =>
+      a.year == b.year && a.month == b.month && a.day == b.day;
+
+  static String _dayLabel(DateTime date) {
+    final now = DateTime.now();
+    if (_sameDay(date, now)) {
+      return 'Today · ${DateFormat('EEEE, MMM d').format(date)}';
+    }
+    if (_sameDay(date, now.subtract(const Duration(days: 1)))) {
+      return 'Yesterday · ${DateFormat('EEEE, MMM d').format(date)}';
+    }
+    return DateFormat('EEEE, MMM d, yyyy').format(date);
+  }
+
+  Widget _buildDayHeader(ShiftReport first, int count) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(4, 6, 4, 12),
+      child: Row(
+        children: [
+          Container(
+            width: 4,
+            height: 18,
+            margin: const EdgeInsets.only(right: 10),
+            decoration: BoxDecoration(
+              color: AppTheme.primaryColor,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              _dayLabel(first.visitDate),
+              style: const TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w700,
+                color: AppTheme.textPrimary,
+              ),
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+            decoration: BoxDecoration(
+              color: AppTheme.primaryColor.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Text(
+              '$count report${count == 1 ? '' : 's'}',
+              style: const TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                color: AppTheme.primaryColor,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -113,7 +174,22 @@ class ReportListWidget extends StatelessWidget {
               ),
             );
           }
-          return _ReportCard(report: vm.reports[index]);
+          final report = vm.reports[index];
+          final startsNewDay = groupByDay &&
+              (index == 0 ||
+                  !_sameDay(vm.reports[index - 1].visitDate, report.visitDate));
+          if (!startsNewDay) return _ReportCard(report: report);
+          final count = vm.reports
+              .where((r) => _sameDay(r.visitDate, report.visitDate))
+              .length;
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (index > 0) const SizedBox(height: 8),
+              _buildDayHeader(report, count),
+              _ReportCard(report: report),
+            ],
+          );
         },
       ),
     );
@@ -237,7 +313,7 @@ class _ReportCard extends StatelessWidget {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        '${report.startTime} – ${report.endTime}',
+                        report.timeLabel,
                         style: TextStyle(
                           fontSize: 11,
                           fontWeight: FontWeight.w500,

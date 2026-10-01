@@ -95,7 +95,7 @@ class PdfService {
             _buildInfoRow('Caregiver', report.caregiverName),
             _buildInfoRow('Client', report.clientName),
             _buildInfoRow('Shift Time',
-                '${report.startTime} - ${report.endTime}'),
+                report.timeLabel),
             _buildInfoRow('Status', report.status.toUpperCase()),
 
             pw.SizedBox(height: 20),
@@ -503,7 +503,7 @@ class PdfService {
             DateFormat('MMM d, yyyy').format(r.visitDate),
             r.caregiverName,
             r.clientName,
-            '${r.startTime} - ${r.endTime}',
+            r.timeLabel,
             r.activitiesPerformed.join(', '),
             r.status.toUpperCase(),
           ]

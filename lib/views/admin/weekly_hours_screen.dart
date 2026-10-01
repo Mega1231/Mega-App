@@ -59,7 +59,7 @@ class _WeeklyHoursScreenState extends State<WeeklyHoursScreen> {
   }
 
   double _calcHours(String startTime, String endTime) {
-    if (startTime.contains('Live-in')) return 8.0;
+    if (startTime.startsWith('Live-in')) return 0;
     final startMin = _parseTimeToMinutes(startTime);
     final endMin = _parseTimeToMinutes(endTime);
     if (endMin <= startMin) return 0;
@@ -757,9 +757,7 @@ class _ClientSection extends StatelessWidget {
                   ),
                   const Spacer(),
                   Text(
-                    r.startTime.contains('Live-in')
-                        ? 'Live-in'
-                        : '${r.startTime} – ${r.endTime}',
+                    r.timeLabel,
                     style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w500,
@@ -767,6 +765,7 @@ class _ClientSection extends StatelessWidget {
                           .withValues(alpha: 0.8),
                     ),
                   ),
+                  if (!r.isLiveIn) ...[
                   const SizedBox(width: 8),
                   Container(
                     padding: const EdgeInsets.symmetric(
@@ -785,6 +784,7 @@ class _ClientSection extends StatelessWidget {
                       ),
                     ),
                   ),
+                  ],
                 ],
               ),
             );

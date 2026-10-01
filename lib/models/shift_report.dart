@@ -37,6 +37,11 @@ class ShiftReport {
     DateTime? createdAt,
   }) : createdAt = createdAt ?? DateTime.now();
 
+  // Older live-in reports were saved as 'Live-in (8 hrs)'.
+  bool get isLiveIn => startTime.startsWith('Live-in');
+
+  String get timeLabel => isLiveIn ? 'Live-in' : '$startTime – $endTime';
+
   factory ShiftReport.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>;
     return ShiftReport(

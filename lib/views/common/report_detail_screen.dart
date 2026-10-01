@@ -86,7 +86,7 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
                       borderRadius: BorderRadius.circular(20),
                     ),
                     child: Text(
-                      '${report.startTime} - ${report.endTime}',
+                      report.timeLabel,
                       style: const TextStyle(
                           color: Colors.white, fontWeight: FontWeight.w500),
                     ),

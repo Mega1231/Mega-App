@@ -154,6 +154,7 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
         body: ReportListWidget(
           emptyMessage: 'No shift reports submitted yet.',
           onLoadMore: () => _reportVm.loadMoreAllReports(),
+          groupByDay: true,
         ),
       ),
     );
