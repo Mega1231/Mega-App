@@ -212,38 +212,39 @@ class _ScheduleList extends StatelessWidget {
 
   const _ScheduleList({required this.assignments});
 
-  Map<String, List<Assignment>> _groupByDay() {
+  static bool _coversDate(Assignment a, DateTime date) {
+    if (!a.schedule.contains(DateFormat('E').format(date))) return false;
+    if (a.startDate != null &&
+        date.isBefore(DateTime(
+            a.startDate!.year, a.startDate!.month, a.startDate!.day))) {
+      return false;
+    }
+    if (a.endDate != null &&
+        date.isAfter(
+            DateTime(a.endDate!.year, a.endDate!.month, a.endDate!.day))) {
+      return false;
+    }
+    return true;
+  }
+
+  List<_DayGroup> _groupByDay() {
     final now = DateTime.now();
-    final todayShort = DateFormat('E').format(now);
-    final tomorrowShort =
-        DateFormat('E').format(now.add(const Duration(days: 1)));
+    final today = DateTime(now.year, now.month, now.day);
 
-    final dayOrder = <String>[];
+    final groups = <_DayGroup>[];
     for (int i = 0; i < 7; i++) {
-      dayOrder.add(DateFormat('E').format(now.add(Duration(days: i))));
+      final date = today.add(Duration(days: i));
+      final matches = assignments.where((a) => _coversDate(a, date)).toList();
+      if (matches.isEmpty) continue;
+      final dayText = DateFormat('EEEE, MMM d').format(date);
+      final label = i == 0
+          ? 'Today – $dayText'
+          : i == 1
+              ? 'Tomorrow – $dayText'
+              : dayText;
+      groups.add(_DayGroup(label: label, date: date, assignments: matches));
     }
-
-    final grouped = <String, List<Assignment>>{};
-    for (final day in dayOrder) {
-      final matches =
-          assignments.where((a) => a.schedule.contains(day)).toList();
-      if (matches.isNotEmpty) {
-        String label;
-        if (day == todayShort) {
-          label = 'Today – ${DateFormat('EEEE, MMM d').format(now)}';
-        } else if (day == tomorrowShort) {
-          final tomorrow = now.add(const Duration(days: 1));
-          label =
-              'Tomorrow – ${DateFormat('EEEE, MMM d').format(tomorrow)}';
-        } else {
-          final date = now.add(Duration(days: dayOrder.indexOf(day)));
-          label = DateFormat('EEEE, MMM d').format(date);
-        }
-        grouped[label] = matches;
-      }
-    }
-
-    return grouped;
+    return groups;
   }
 
   @override
@@ -285,9 +286,9 @@ class _ScheduleList extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        for (final entry in grouped.entries) ...[
-          _DayHeader(text: entry.key),
-          _DaySection(assignments: entry.value),
+        for (final group in grouped) ...[
+          _DayHeader(text: group.label),
+          _DaySection(assignments: group.assignments, date: group.date),
           const SizedBox(height: 8),
         ],
       ],
@@ -295,9 +296,18 @@ class _ScheduleList extends StatelessWidget {
   }
 }
 
+class _DayGroup {
+  final String label;
+  final DateTime date;
+  final List<Assignment> assignments;
+
+  _DayGroup({required this.label, required this.date, required this.assignments});
+}
+
 class _DaySection extends StatefulWidget {
   final List<Assignment> assignments;
-  const _DaySection({required this.assignments});
+  final DateTime date;
+  const _DaySection({required this.assignments, required this.date});
 
   @override
   State<_DaySection> createState() => _DaySectionState();
@@ -348,7 +358,7 @@ class _DaySectionState extends State<_DaySection>
     return Column(
       children: [
         // Always show first card
-        _ScheduleCard(assignment: widget.assignments.first),
+        _ScheduleCard(assignment: widget.assignments.first, date: widget.date),
 
         // Expandable remaining cards
         if (remaining > 0) ...[
@@ -358,7 +368,7 @@ class _DaySectionState extends State<_DaySection>
             child: Column(
               children: widget.assignments
                   .skip(1)
-                  .map((a) => _ScheduleCard(assignment: a))
+                  .map((a) => _ScheduleCard(assignment: a, date: widget.date))
                   .toList(),
             ),
           ),
@@ -467,8 +477,9 @@ class _DayHeader extends StatelessWidget {
 
 class _ScheduleCard extends StatelessWidget {
   final Assignment assignment;
+  final DateTime date;
 
-  const _ScheduleCard({required this.assignment});
+  const _ScheduleCard({required this.assignment, required this.date});
 
   String _extractTime() {
     final match = RegExp(
@@ -480,7 +491,7 @@ class _ScheduleCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final time = _extractTime();
+    final time = assignment.isLiveIn ? 'Live-in' : _extractTime();
 
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
@@ -560,6 +571,23 @@ class _ScheduleCard extends StatelessWidget {
                         ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 3),
+                Row(
+                  children: [
+                    Icon(Icons.event,
+                        size: 14,
+                        color: AppTheme.primaryColor.withValues(alpha: 0.5)),
+                    const SizedBox(width: 4),
+                    Text(
+                      DateFormat('EEE, MMM d, yyyy').format(date),
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: AppTheme.textPrimary,
                       ),
                     ),
                   ],

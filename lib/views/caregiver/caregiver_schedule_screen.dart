@@ -278,6 +278,7 @@ class _CaregiverScheduleScreenState extends State<CaregiverScheduleScreen> {
                             final client = vm.clientProfiles[a.clientId];
                             return _ScheduleVisitCard(
                               assignment: a,
+                              date: _selectedDate,
                               clientProfile: client,
                               index: index,
                               isLast: index == dayAssignments.length - 1,
@@ -296,12 +297,14 @@ class _CaregiverScheduleScreenState extends State<CaregiverScheduleScreen> {
 
 class _ScheduleVisitCard extends StatelessWidget {
   final Assignment assignment;
+  final DateTime date;
   final AppUser? clientProfile;
   final int index;
   final bool isLast;
 
   const _ScheduleVisitCard({
     required this.assignment,
+    required this.date,
     this.clientProfile,
     required this.index,
     required this.isLast,
@@ -409,6 +412,23 @@ class _ScheduleVisitCard extends StatelessWidget {
                             ),
                           ),
                         ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      const Icon(Icons.event,
+                          size: 14, color: AppTheme.primaryColor),
+                      const SizedBox(width: 4),
+                      Text(
+                        '${DateFormat('EEE, MMM d, yyyy').format(date)}'
+                        '${assignment.isLiveIn ? ' · Live-in' : assignment.shiftStartTime.isNotEmpty ? ' · ${assignment.shiftStartTime} - ${assignment.shiftEndTime}' : ''}',
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: AppTheme.textPrimary,
+                        ),
+                      ),
                     ],
                   ),
                   if (address.isNotEmpty) ...[
