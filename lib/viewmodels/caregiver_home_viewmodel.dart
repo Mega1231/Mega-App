@@ -70,25 +70,10 @@ class CaregiverHomeViewModel extends ChangeNotifier {
     await loadData();
   }
 
-  /// Get visit-day assignments for a given day name (e.g. "Mon")
-  /// Optionally pass a date to filter by start/end date range.
-  /// Results are sorted by shift start time (ascending).
-  List<Assignment> getAssignmentsForDay(String dayShort, {DateTime? date}) {
-    final filtered = _assignments.where((a) {
-      if (!a.schedule.contains(dayShort)) return false;
-      if (date != null) {
-        final dateOnly = DateTime(date.year, date.month, date.day);
-        if (a.startDate != null) {
-          final start = DateTime(a.startDate!.year, a.startDate!.month, a.startDate!.day);
-          if (dateOnly.isBefore(start)) return false;
-        }
-        if (a.endDate != null) {
-          final end = DateTime(a.endDate!.year, a.endDate!.month, a.endDate!.day);
-          if (dateOnly.isAfter(end)) return false;
-        }
-      }
-      return true;
-    }).toList();
+  /// Assignments with a visit on [date], sorted by shift start time.
+  List<Assignment> getAssignmentsForDate(DateTime date) {
+    final filtered =
+        _assignments.where((a) => a.isScheduledOn(date)).toList();
 
     // Sort by shift start time ascending
     filtered.sort((a, b) {

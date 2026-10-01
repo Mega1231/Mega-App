@@ -69,6 +69,10 @@ function findMissedShifts({ now, assignments, clockedInAssignmentIds,
     if (!String(a.schedule || "").includes(today.weekday)) continue;
     if (a.startDate && zonedDateKey(a.startDate, timeZone) > todayKey) continue;
     if (a.endDate && zonedDateKey(a.endDate, timeZone) < todayKey) continue;
+    // Day removed from the schedule by the admin.
+    if (Array.isArray(a.excludedDates) && a.excludedDates.includes(todayKey)) {
+      continue;
+    }
 
     const start = parseClockTime(a.shiftStartTime);
     if (start === null) continue;

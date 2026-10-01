@@ -113,6 +113,19 @@ class AssignmentService {
     await _firestore.collection('assignments').doc(id).update(data);
   }
 
+  /// Remove a single day from a recurring assignment (e.g. a missed visit).
+  Future<void> excludeDate(String assignmentId, DateTime date) async {
+    await _firestore.collection('assignments').doc(assignmentId).update({
+      'excludedDates': FieldValue.arrayUnion([Assignment.dateKey(date)]),
+    });
+  }
+
+  Future<void> restoreDate(String assignmentId, DateTime date) async {
+    await _firestore.collection('assignments').doc(assignmentId).update({
+      'excludedDates': FieldValue.arrayRemove([Assignment.dateKey(date)]),
+    });
+  }
+
   /// Fetch active assignments for a client
   Future<List<Assignment>> getClientAssignments(String clientId) async {
     final snapshot = await _firestore

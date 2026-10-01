@@ -212,21 +212,6 @@ class _ScheduleList extends StatelessWidget {
 
   const _ScheduleList({required this.assignments});
 
-  static bool _coversDate(Assignment a, DateTime date) {
-    if (!a.schedule.contains(DateFormat('E').format(date))) return false;
-    if (a.startDate != null &&
-        date.isBefore(DateTime(
-            a.startDate!.year, a.startDate!.month, a.startDate!.day))) {
-      return false;
-    }
-    if (a.endDate != null &&
-        date.isAfter(
-            DateTime(a.endDate!.year, a.endDate!.month, a.endDate!.day))) {
-      return false;
-    }
-    return true;
-  }
-
   List<_DayGroup> _groupByDay() {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
@@ -234,7 +219,7 @@ class _ScheduleList extends StatelessWidget {
     final groups = <_DayGroup>[];
     for (int i = 0; i < 7; i++) {
       final date = today.add(Duration(days: i));
-      final matches = assignments.where((a) => _coversDate(a, date)).toList();
+      final matches = assignments.where((a) => a.isScheduledOn(date)).toList();
       if (matches.isEmpty) continue;
       final dayText = DateFormat('EEEE, MMM d').format(date);
       final label = i == 0

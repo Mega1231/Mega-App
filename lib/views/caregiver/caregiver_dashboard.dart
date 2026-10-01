@@ -143,8 +143,7 @@ class _CaregiverHomeState extends State<_CaregiverHome> {
     final authVm = context.watch<AuthViewModel>();
     final userName = authVm.currentUser?.fullName ?? 'Caregiver';
     final today = DateTime.now();
-    final todayShort = DateFormat('E').format(today);
-    final todayAssignments = vm.getAssignmentsForDay(todayShort, date: today);
+    final todayAssignments = vm.getAssignmentsForDate(today);
 
     return Scaffold(
       appBar: AppBar(

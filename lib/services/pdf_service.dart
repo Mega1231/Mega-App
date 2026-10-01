@@ -597,44 +597,7 @@ class PdfService {
     return file.path;
   }
 
-  /// Generate a client schedule PDF (caregiver name, days, time - no address).
-  /// Map 3-letter day abbreviations to DateTime weekday values (1=Mon, 7=Sun).
-  static const _dayMap = {
-    'Mon': DateTime.monday,
-    'Tue': DateTime.tuesday,
-    'Wed': DateTime.wednesday,
-    'Thu': DateTime.thursday,
-    'Fri': DateTime.friday,
-    'Sat': DateTime.saturday,
-    'Sun': DateTime.sunday,
-  };
-
-  /// Parse which weekdays an assignment covers from its schedule string.
-  List<int> _parseScheduleDays(String schedule) {
-    final daysPart = schedule.split('|').first.trim();
-    final days = <int>[];
-    for (final entry in _dayMap.entries) {
-      if (daysPart.contains(entry.key)) days.add(entry.value);
-    }
-    return days;
-  }
-
-  /// Check if an assignment is active on a given date.
-  bool _isAssignmentActiveOn(Assignment a, DateTime date) {
-    final days = _parseScheduleDays(a.schedule);
-    if (!days.contains(date.weekday)) return false;
-    final dateOnly = DateTime(date.year, date.month, date.day);
-    if (a.startDate != null) {
-      final start = DateTime(a.startDate!.year, a.startDate!.month, a.startDate!.day);
-      if (dateOnly.isBefore(start)) return false;
-    }
-    if (a.endDate != null) {
-      final end = DateTime(a.endDate!.year, a.endDate!.month, a.endDate!.day);
-      if (dateOnly.isAfter(end)) return false;
-    }
-    return true;
-  }
-
+  /// Client schedule as a month calendar (caregiver name and time per day).
   Future<String> generateClientSchedulePdf({
     required String clientName,
     required List<Assignment> assignments,
@@ -762,7 +725,7 @@ class PdfService {
                         return pw.TableRow(
                           children: week.map((date) {
                             final active = assignments
-                                .where((a) => _isAssignmentActiveOn(a, date))
+                                .where((a) => a.isScheduledOn(date))
                                 .toList();
 
                             return pw.Container(

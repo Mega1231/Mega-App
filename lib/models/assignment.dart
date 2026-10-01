@@ -19,6 +19,32 @@ class Assignment {
   final DateTime createdAt;
   final DateTime? startDate;
   final DateTime? endDate;
+  // Single days removed from the recurring schedule, as 'yyyy-MM-dd'.
+  final List<String> excludedDates;
+
+  static const _weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+  static String dateKey(DateTime date) =>
+      '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+
+  bool isExcludedOn(DateTime date) => excludedDates.contains(dateKey(date));
+
+  /// Whether this recurring assignment has a visit on [date]: right weekday,
+  /// inside start/end dates, and that day not removed.
+  bool isScheduledOn(DateTime date) {
+    final days = schedule.split('|').first;
+    if (!days.contains(_weekdays[date.weekday - 1])) return false;
+    final day = DateTime(date.year, date.month, date.day);
+    if (startDate != null &&
+        day.isBefore(DateTime(startDate!.year, startDate!.month, startDate!.day))) {
+      return false;
+    }
+    if (endDate != null &&
+        day.isAfter(DateTime(endDate!.year, endDate!.month, endDate!.day))) {
+      return false;
+    }
+    return !isExcludedOn(date);
+  }
 
   Assignment({
     required this.id,
@@ -39,6 +65,7 @@ class Assignment {
     DateTime? createdAt,
     this.startDate,
     this.endDate,
+    this.excludedDates = const [],
   }) : createdAt = createdAt ?? DateTime.now();
 
   factory Assignment.fromFirestore(DocumentSnapshot doc) {
@@ -62,6 +89,7 @@ class Assignment {
       createdAt: (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
       startDate: (data['startDate'] as Timestamp?)?.toDate(),
       endDate: (data['endDate'] as Timestamp?)?.toDate(),
+      excludedDates: List<String>.from(data['excludedDates'] ?? []),
     );
   }
 
@@ -84,6 +112,7 @@ class Assignment {
       'createdAt': Timestamp.fromDate(createdAt),
       if (startDate != null) 'startDate': Timestamp.fromDate(startDate!),
       if (endDate != null) 'endDate': Timestamp.fromDate(endDate!),
+      if (excludedDates.isNotEmpty) 'excludedDates': excludedDates,
     };
   }
 }

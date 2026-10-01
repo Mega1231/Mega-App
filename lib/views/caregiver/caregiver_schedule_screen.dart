@@ -68,8 +68,7 @@ class _CaregiverScheduleScreenState extends State<CaregiverScheduleScreen> {
   @override
   Widget build(BuildContext context) {
     final vm = widget.vm;
-    final dayShort = DateFormat('E').format(_selectedDate); // e.g. "Mon"
-    final dayAssignments = vm.getAssignmentsForDay(dayShort, date: _selectedDate);
+    final dayAssignments = vm.getAssignmentsForDate(_selectedDate);
 
     return Scaffold(
       appBar: AppBar(title: const Text('My Schedule')),
@@ -126,9 +125,8 @@ class _CaregiverScheduleScreenState extends State<CaregiverScheduleScreen> {
                       final date = _weekDates[index];
                       final isSelected = _isSameDay(date, _selectedDate);
                       final isToday = _isSameDay(date, DateTime.now());
-                      final dayLabel = DateFormat('E').format(date);
                       final hasVisits =
-                          vm.getAssignmentsForDay(dayLabel, date: date).isNotEmpty;
+                          vm.getAssignmentsForDate(date).isNotEmpty;
 
                       return GestureDetector(
                         onTap: () => _selectDate(date),

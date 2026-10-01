@@ -10,6 +10,7 @@ import '../../viewmodels/manage_users_viewmodel.dart';
 import '../../widgets/custom_loader.dart';
 import '../../widgets/custom_snackbar.dart';
 import '../client/client_reports_screen.dart';
+import 'client_schedule_screen.dart';
 import 'create_user_screen.dart';
 
 class ManageClientsScreen extends StatelessWidget {
@@ -646,6 +647,35 @@ class _UserCardState extends State<_UserCard> {
                 icon: const Icon(Icons.summarize, size: 18),
                 label: const Text(
                   'Shift Reports',
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                ),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppTheme.primaryColor,
+                  side: BorderSide(
+                    color: AppTheme.primaryColor.withValues(alpha: 0.3),
+                  ),
+                  backgroundColor:
+                      AppTheme.primaryColor.withValues(alpha: 0.04),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                ),
+              ),
+            ),
+            const SizedBox(height: 10),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => ClientScheduleScreen(client: user),
+                  ),
+                ),
+                icon: const Icon(Icons.calendar_month, size: 18),
+                label: const Text(
+                  'Schedule Calendar',
                   style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
                 ),
                 style: OutlinedButton.styleFrom(
