@@ -2,3 +2,7 @@ service-account.json
 functions/node_modules/
 .dart_tool/
 build/
+
+# FVM Version Cache
+.fvm/
+.env
