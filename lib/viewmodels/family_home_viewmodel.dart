@@ -15,12 +15,19 @@ class FamilyHomeViewModel extends ChangeNotifier {
   AppUser? get client => _client;
   List<Assignment> get assignments => _assignments;
 
-  String? get caregiverName =>
-      _assignments.isNotEmpty ? _assignments.first.caregiverName : null;
-  String? get caregiverPhotoUrl =>
-      _assignments.isNotEmpty ? _assignments.first.caregiverPhotoUrl : null;
-  String? get caregiverId =>
-      _assignments.isNotEmpty ? _assignments.first.caregiverId : null;
+  /// One assignment per caregiver (a caregiver can have several assignments
+  /// for the same client), sorted by name.
+  List<Assignment> get caregivers {
+    final byCaregiver = <String, Assignment>{};
+    for (final a in _assignments) {
+      byCaregiver.putIfAbsent(a.caregiverId, () => a);
+    }
+    return byCaregiver.values.toList()
+      ..sort((a, b) => a.caregiverName
+          .toLowerCase()
+          .compareTo(b.caregiverName.toLowerCase()));
+  }
+
   bool get hasCaregiver => _assignments.isNotEmpty;
 
   FamilyHomeViewModel({required this.familyUserId});
