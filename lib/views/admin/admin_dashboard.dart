@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../../models/app_user.dart';
+import '../../models/chat_room.dart';
+import '../../services/chat_service.dart';
 import '../../theme/app_theme.dart';
 import '../../viewmodels/auth_viewmodel.dart';
 import '../../viewmodels/dashboard_viewmodel.dart';
@@ -13,6 +15,7 @@ import 'admin_chat_list_screen.dart';
 import 'admin_schedules_screen.dart';
 import 'admin_clock_logs_screen.dart';
 import 'weekly_hours_screen.dart';
+import '../common/chat_screen.dart';
 import '../common/profile_screen.dart';
 
 class AdminDashboard extends StatefulWidget {
@@ -24,12 +27,19 @@ class AdminDashboard extends StatefulWidget {
 
 class _AdminDashboardState extends State<AdminDashboard> {
   int _currentIndex = 0;
+  final DashboardViewModel _dashVm = DashboardViewModel()..loadData();
+
+  @override
+  void dispose() {
+    _dashVm.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     final pages = [
-      ChangeNotifierProvider(
-        create: (_) => DashboardViewModel()..loadData(),
+      ChangeNotifierProvider.value(
+        value: _dashVm,
         child: const _AdminHome(),
       ),
       const ManageClientsScreen(),
@@ -44,7 +54,13 @@ class _AdminDashboardState extends State<AdminDashboard> {
       ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _currentIndex,
-        onDestinationSelected: (i) => setState(() => _currentIndex = i),
+        onDestinationSelected: (i) {
+          // Tabs stay mounted, so re-fetch counts after edits on other tabs.
+          if (i == 0 && _currentIndex != 0) {
+            _dashVm.loadData(forceRefresh: true);
+          }
+          setState(() => _currentIndex = i);
+        },
         destinations: const [
           NavigationDestination(
               icon: Icon(Icons.dashboard), label: 'Dashboard'),
@@ -151,7 +167,7 @@ class _AdminHome extends StatelessWidget {
                   ),
                   const SizedBox(width: 12),
                   _buildStatCard(
-                    'Caregivers',
+                    'Total Caregivers',
                     '${dashVm.caregiverCount}',
                     Icons.medical_services,
                     const Color(0xFF2E7D32),
@@ -176,7 +192,30 @@ class _AdminHome extends StatelessWidget {
                   ),
                 ],
               ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  _buildStatCard(
+                    'Inactive Clients',
+                    '${dashVm.inactiveClientCount}',
+                    Icons.person_off,
+                    const Color(0xFF616161),
+                  ),
+                  const SizedBox(width: 12),
+                  _buildStatCard(
+                    'Inactive Caregivers',
+                    '${dashVm.inactiveCaregiverCount}',
+                    Icons.block,
+                    const Color(0xFFC62828),
+                  ),
+                ],
+              ),
               const SizedBox(height: 28),
+
+              if (authVm.currentUser != null) ...[
+                _GroupsSection(currentUser: authVm.currentUser!),
+                const SizedBox(height: 28),
+              ],
 
               // Quick Actions
               const Text(
@@ -560,6 +599,163 @@ class _AdminHome extends StatelessWidget {
             const Icon(Icons.chevron_right, color: AppTheme.textSecondary),
         onTap: onTap,
       ),
+    );
+  }
+}
+
+class _GroupsSection extends StatefulWidget {
+  final AppUser currentUser;
+
+  const _GroupsSection({required this.currentUser});
+
+  @override
+  State<_GroupsSection> createState() => _GroupsSectionState();
+}
+
+class _GroupsSectionState extends State<_GroupsSection> {
+  late final Stream<List<ChatRoom>> _groupsStream =
+      ChatService().getGroupChatsStream();
+
+  void _openGroup(ChatRoom group) {
+    final isMember = group.participants.contains(widget.currentUser.uid);
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ChatScreen(
+          currentUser: widget.currentUser,
+          groupChatRoom: isMember ? group : null,
+          readOnlyChatRoom: isMember ? null : group,
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<List<ChatRoom>>(
+      stream: _groupsStream,
+      builder: (context, snapshot) {
+        final groups = snapshot.data ?? const <ChatRoom>[];
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Expanded(
+                  child: Text(
+                    'Groups',
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                      color: AppTheme.textPrimary,
+                    ),
+                  ),
+                ),
+                if (groups.isNotEmpty)
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: AppTheme.successColor.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      '${groups.length}',
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: AppTheme.successColor,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            if (!snapshot.hasData)
+              const Center(
+                child: Padding(
+                  padding: EdgeInsets.all(20),
+                  child: CircularProgressIndicator(),
+                ),
+              )
+            else if (groups.isEmpty)
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 28),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: Colors.grey.withValues(alpha: 0.1)),
+                ),
+                child: const Column(
+                  children: [
+                    Icon(Icons.group_outlined,
+                        size: 40, color: AppTheme.textSecondary),
+                    SizedBox(height: 8),
+                    Text(
+                      'No groups yet',
+                      style: TextStyle(
+                        color: AppTheme.textSecondary,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              )
+            else
+              Container(
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.04),
+                      blurRadius: 10,
+                      offset: const Offset(0, 3),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  children: [
+                    for (int i = 0; i < groups.length; i++) ...[
+                      ListTile(
+                        onTap: () => _openGroup(groups[i]),
+                        leading: CircleAvatar(
+                          backgroundColor:
+                              AppTheme.successColor.withValues(alpha: 0.1),
+                          child: const Icon(Icons.group,
+                              color: AppTheme.successColor),
+                        ),
+                        title: Text(
+                          groups[i].groupName,
+                          style: const TextStyle(fontWeight: FontWeight.w600),
+                        ),
+                        subtitle: Text(
+                          '${groups[i].participants.length} members'
+                          '${groups[i].messagingDisabled ? ' · Messaging off' : ''}'
+                          '${groups[i].lastMessage.isNotEmpty ? ' · ${groups[i].lastMessage}' : ''}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        trailing: const Icon(Icons.chevron_right,
+                            color: AppTheme.textSecondary),
+                      ),
+                      if (i < groups.length - 1)
+                        Divider(
+                          height: 1,
+                          indent: 72,
+                          endIndent: 16,
+                          color: Colors.grey.withValues(alpha: 0.12),
+                        ),
+                    ],
+                  ],
+                ),
+              ),
+          ],
+        );
+      },
     );
   }
 }

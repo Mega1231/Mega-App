@@ -17,6 +17,8 @@ class DashboardViewModel extends ChangeNotifier {
   int get caregiverCount => _caregiverCount;
   int get activeClientCount => _activeClientCount;
   int get activeCaregiverCount => _activeCaregiverCount;
+  int get inactiveClientCount => _clientCount - _activeClientCount;
+  int get inactiveCaregiverCount => _caregiverCount - _activeCaregiverCount;
   List<AppUser> get recentUsers => _recentUsers;
   bool get isLoading => _isLoading;
 

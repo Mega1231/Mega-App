@@ -42,6 +42,57 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 
   bool get _isReadOnly => widget.readOnlyChatRoom != null;
   bool get _isGroup => widget.groupChatRoom != null;
+  bool get _isAdmin => widget.currentUser.role == 'admin';
+
+  Future<void> _toggleGroupMessaging(ChatRoom room) async {
+    final disable = !room.messagingDisabled;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(disable ? 'Disable messaging?' : 'Enable messaging?'),
+        content: Text(disable
+            ? 'Members of "${room.groupName}" will no longer be able to send messages. Admins can still post.'
+            : 'Members of "${room.groupName}" will be able to send messages again.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(disable ? 'Disable' : 'Enable'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    try {
+      await ChatService().setGroupMessagingDisabled(room.id, disable);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to update group: $e'),
+          backgroundColor: AppTheme.errorColor,
+        ),
+      );
+    }
+  }
+
+  Widget _messagingToggleAction() {
+    return Consumer<ChatViewModel>(
+      builder: (_, vm, _) {
+        final room =
+            vm.chatRoom ?? widget.groupChatRoom ?? widget.readOnlyChatRoom!;
+        final disabled = room.messagingDisabled;
+        return IconButton(
+          icon: Icon(disabled ? Icons.speaker_notes_off : Icons.speaker_notes),
+          tooltip: disabled ? 'Enable messaging' : 'Disable messaging',
+          onPressed: () => _toggleGroupMessaging(room),
+        );
+      },
+    );
+  }
 
   @override
   void initState() {
@@ -150,7 +201,23 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
             Expanded(child: _buildMessageList()),
             if (!_isReadOnly && !_isGroup) _buildTypingIndicator(),
             if (_isGroup) _buildGroupTypingIndicator(),
-            if (!_isReadOnly) _buildInputBar(),
+            if (!_isReadOnly && !_isGroup) _buildInputBar(),
+            if (_isGroup)
+              Consumer<ChatViewModel>(
+                builder: (_, vm, _) {
+                  final disabled = (vm.chatRoom ?? widget.groupChatRoom!)
+                      .messagingDisabled;
+                  if (!disabled) return _buildInputBar();
+                  if (!_isAdmin) return _buildMessagingDisabledBanner();
+                  return Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      _buildMessagingDisabledBanner(adminView: true),
+                      _buildInputBar(),
+                    ],
+                  );
+                },
+              ),
           ],
         ),
       ),
@@ -229,7 +296,8 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
           ],
         ),
         actions: [
-          if (widget.currentUser.role == 'admin')
+          if (_isAdmin) _messagingToggleAction(),
+          if (_isAdmin)
             IconButton(
               icon: const Icon(Icons.group_add),
               tooltip: 'Manage members',
@@ -258,6 +326,10 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
             ),
           ],
         ),
+        actions: [
+          if (_isAdmin && widget.readOnlyChatRoom!.isGroup)
+            _messagingToggleAction(),
+        ],
       );
     }
 
@@ -683,6 +755,39 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildMessagingDisabledBanner({bool adminView = false}) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      color: AppTheme.errorColor.withValues(alpha: 0.06),
+      child: SafeArea(
+        top: false,
+        bottom: !adminView,
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.speaker_notes_off,
+                size: 16, color: AppTheme.errorColor.withValues(alpha: 0.8)),
+            const SizedBox(width: 8),
+            Flexible(
+              child: Text(
+                adminView
+                    ? 'Messaging is disabled for members — only admins can post'
+                    : 'Messaging has been disabled by admin',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                  color: AppTheme.errorColor.withValues(alpha: 0.9),
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

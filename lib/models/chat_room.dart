@@ -16,6 +16,8 @@ class ChatRoom {
   final bool isGroup;
   final String groupName;
   final String createdBy;
+  // Group only: when true, only admins can post.
+  final bool messagingDisabled;
 
   ChatRoom({
     required this.id,
@@ -32,6 +34,7 @@ class ChatRoom {
     this.isGroup = false,
     this.groupName = '',
     this.createdBy = '',
+    this.messagingDisabled = false,
     DateTime? createdAt,
   }) : createdAt = createdAt ?? DateTime.now();
 
@@ -52,6 +55,7 @@ class ChatRoom {
       isGroup: data['isGroup'] ?? false,
       groupName: data['groupName'] ?? '',
       createdBy: data['createdBy'] ?? '',
+      messagingDisabled: data['messagingDisabled'] ?? false,
       createdAt: (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
     );
   }
@@ -63,9 +67,9 @@ class ChatRoom {
       'participantPhotos': participantPhotos,
       'participantRoles': participantRoles,
       'lastMessage': lastMessage,
-      'lastMessageTime': lastMessageTime != null
-          ? Timestamp.fromDate(lastMessageTime!)
-          : null,
+      // Seeded with createdAt so a new chat sorts to the top of
+      // orderBy('lastMessageTime', descending) lists instead of the bottom.
+      'lastMessageTime': Timestamp.fromDate(lastMessageTime ?? createdAt),
       'lastMessageSenderId': lastMessageSenderId,
       'lastMessageType': lastMessageType,
       'unreadCount': unreadCount,

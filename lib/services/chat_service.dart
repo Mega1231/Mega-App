@@ -91,6 +91,21 @@ class ChatService {
             snapshot.docs.map((doc) => ChatRoom.fromFirestore(doc)).toList());
   }
 
+  /// Stream all group chats, newest activity first (admin dashboard)
+  Stream<List<ChatRoom>> getGroupChatsStream() {
+    return _firestore
+        .collection('chats')
+        .where('isGroup', isEqualTo: true)
+        .snapshots()
+        .map((snapshot) {
+      final groups =
+          snapshot.docs.map((doc) => ChatRoom.fromFirestore(doc)).toList();
+      groups.sort((a, b) => (b.lastMessageTime ?? b.createdAt)
+          .compareTo(a.lastMessageTime ?? a.createdAt));
+      return groups;
+    });
+  }
+
   /// Stream messages for a chat room (real-time, paginated)
   Stream<List<ChatMessage>> getMessagesStream(String chatId, {int limit = messagesPerPage}) {
     return _firestore
@@ -478,6 +493,12 @@ class ChatService {
         );
       }
     }
+  }
+
+  Future<void> setGroupMessagingDisabled(String chatId, bool disabled) async {
+    await _firestore.collection('chats').doc(chatId).update({
+      'messagingDisabled': disabled,
+    });
   }
 
   /// Delete a chat room (admin only)
