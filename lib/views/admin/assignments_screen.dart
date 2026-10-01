@@ -460,18 +460,70 @@ class _AssignmentCard extends StatelessWidget {
   }
 }
 
+/// Opens the New Assignment form outside the Assignments screen, e.g. from a
+/// client's schedule. [client] is preselected and [startDate] prefilled.
+Future<void> showCreateAssignmentSheet(
+  BuildContext context, {
+  AppUser? client,
+  DateTime? startDate,
+}) {
+  return showModalBottomSheet(
+    context: context,
+    isScrollControlled: true,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+    ),
+    builder: (_) => ChangeNotifierProvider(
+      create: (_) => AssignmentViewModel()..loadDropdownData(),
+      child: _CreateAssignmentSheet(
+        initialClientId: client?.uid,
+        initialStartDate: startDate,
+        refreshListOnCreate: false,
+      ),
+    ),
+  );
+}
+
+/// Schedules may be entered up to a year back (e.g. to record past visits).
+DateTime _earliestScheduleDate() {
+  final now = DateTime.now();
+  return DateTime(now.year - 1, now.month, now.day);
+}
+
 class _CreateAssignmentSheet extends StatefulWidget {
-  const _CreateAssignmentSheet();
+  final String? initialClientId;
+  final DateTime? initialStartDate;
+  // The standalone sheet owns a VM that is disposed when the sheet closes.
+  final bool refreshListOnCreate;
+
+  const _CreateAssignmentSheet({
+    this.initialClientId,
+    this.initialStartDate,
+    this.refreshListOnCreate = true,
+  });
 
   @override
   State<_CreateAssignmentSheet> createState() => _CreateAssignmentSheetState();
 }
 
 class _CreateAssignmentSheetState extends State<_CreateAssignmentSheet> {
-  AppUser? _selectedClient;
+  AppUser? _pickedClient;
   AppUser? _selectedCaregiver;
   final Set<String> _selectedDays = {};
-  DateTime? _startDate;
+  late DateTime? _startDate = widget.initialStartDate;
+
+  // Dropdown items must be the same instances the VM loaded, so the
+  // preselected client is resolved by uid once the list is available.
+  AppUser? get _selectedClient {
+    if (_pickedClient != null || widget.initialClientId == null) {
+      return _pickedClient;
+    }
+    return context
+        .read<AssignmentViewModel>()
+        .clients
+        .where((c) => c.uid == widget.initialClientId)
+        .firstOrNull;
+  }
   DateTime? _endDate;
   TimeOfDay? _startTime;
   TimeOfDay? _endTime;
@@ -524,7 +576,7 @@ class _CreateAssignmentSheetState extends State<_CreateAssignmentSheet> {
                           DropdownMenuItem(value: c, child: Text(c.fullName)),
                     )
                     .toList(),
-                onChanged: (v) => setState(() => _selectedClient = v),
+                onChanged: (v) => setState(() => _pickedClient = v),
                 hint: Text(
                   vm.clients.isEmpty
                       ? 'No active clients'
@@ -698,7 +750,9 @@ class _CreateAssignmentSheetState extends State<_CreateAssignmentSheet> {
       initialDate: isStart
           ? (_startDate ?? now)
           : (_endDate ?? _startDate ?? now),
-      firstDate: isStart ? now : (_startDate ?? now),
+      firstDate: isStart
+          ? _earliestScheduleDate()
+          : (_startDate ?? _earliestScheduleDate()),
       lastDate: now.add(const Duration(days: 365)),
     );
     if (picked != null) {
@@ -767,7 +821,7 @@ class _CreateAssignmentSheetState extends State<_CreateAssignmentSheet> {
     Navigator.pop(context);
 
     if (success) {
-      vm.refresh();
+      if (widget.refreshListOnCreate) vm.refresh();
       if (!mounted) return;
       CustomSnackbar.success(context: context, message: 'Assignment created.', showFromTop: true);
     } else {
@@ -780,18 +834,61 @@ class _CreateAssignmentSheetState extends State<_CreateAssignmentSheet> {
   }
 }
 
+/// Opens the Group Assignment form (several caregivers, each with their own
+/// time) outside the Assignments screen, with [client] preselected.
+Future<void> showGroupAssignmentSheet(
+  BuildContext context, {
+  AppUser? client,
+  DateTime? startDate,
+}) {
+  return showModalBottomSheet(
+    context: context,
+    isScrollControlled: true,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+    ),
+    builder: (_) => ChangeNotifierProvider(
+      create: (_) => AssignmentViewModel()..loadDropdownData(),
+      child: _GroupAssignmentSheet(
+        initialClientId: client?.uid,
+        initialStartDate: startDate,
+        refreshListOnCreate: false,
+      ),
+    ),
+  );
+}
+
 class _GroupAssignmentSheet extends StatefulWidget {
-  const _GroupAssignmentSheet();
+  final String? initialClientId;
+  final DateTime? initialStartDate;
+  final bool refreshListOnCreate;
+
+  const _GroupAssignmentSheet({
+    this.initialClientId,
+    this.initialStartDate,
+    this.refreshListOnCreate = true,
+  });
 
   @override
   State<_GroupAssignmentSheet> createState() => _GroupAssignmentSheetState();
 }
 
 class _GroupAssignmentSheetState extends State<_GroupAssignmentSheet> {
-  AppUser? _selectedClient;
+  AppUser? _pickedClient;
   final Set<String> _selectedCaregiverIds = {};
   final Set<String> _selectedDays = {};
-  DateTime? _startDate;
+  late DateTime? _startDate = widget.initialStartDate;
+
+  AppUser? get _selectedClient {
+    if (_pickedClient != null || widget.initialClientId == null) {
+      return _pickedClient;
+    }
+    return context
+        .read<AssignmentViewModel>()
+        .clients
+        .where((c) => c.uid == widget.initialClientId)
+        .firstOrNull;
+  }
   DateTime? _endDate;
 
   // Per-caregiver time slots
@@ -858,7 +955,7 @@ class _GroupAssignmentSheetState extends State<_GroupAssignmentSheet> {
                     .map((c) => DropdownMenuItem(
                         value: c, child: Text(c.fullName)))
                     .toList(),
-                onChanged: (v) => setState(() => _selectedClient = v),
+                onChanged: (v) => setState(() => _pickedClient = v),
                 hint: Text(
                   vm.clients.isEmpty
                       ? 'No active clients'
@@ -1083,7 +1180,9 @@ class _GroupAssignmentSheetState extends State<_GroupAssignmentSheet> {
       initialDate: isStart
           ? (_startDate ?? now)
           : (_endDate ?? _startDate ?? now),
-      firstDate: isStart ? now : (_startDate ?? now),
+      firstDate: isStart
+          ? _earliestScheduleDate()
+          : (_startDate ?? _earliestScheduleDate()),
       lastDate: now.add(const Duration(days: 365)),
     );
     if (picked != null) {
@@ -1156,7 +1255,7 @@ class _GroupAssignmentSheetState extends State<_GroupAssignmentSheet> {
     Navigator.pop(context);
 
     if (success) {
-      vm.refresh();
+      if (widget.refreshListOnCreate) vm.refresh();
       if (!mounted) return;
       CustomSnackbar.success(
         context: context,

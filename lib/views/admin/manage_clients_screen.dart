@@ -675,7 +675,7 @@ class _UserCardState extends State<_UserCard> {
                 ),
                 icon: const Icon(Icons.calendar_month, size: 18),
                 label: const Text(
-                  'Schedule Calendar',
+                  'Schedule',
                   style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
                 ),
                 style: OutlinedButton.styleFrom(

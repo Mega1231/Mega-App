@@ -5,6 +5,7 @@ import '../../models/assignment.dart';
 import '../../services/assignment_service.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/custom_snackbar.dart';
+import 'assignments_screen.dart';
 
 const _caregiverColor = Color(0xFFE91E63);
 
@@ -124,6 +125,23 @@ class _ClientScheduleScreenState extends State<ClientScheduleScreen> {
     }
   }
 
+  Future<void> _schedule({DateTime? startDate, bool multiple = false}) async {
+    if (multiple) {
+      await showGroupAssignmentSheet(
+        context,
+        client: widget.client,
+        startDate: startDate,
+      );
+    } else {
+      await showCreateAssignmentSheet(
+        context,
+        client: widget.client,
+        startDate: startDate,
+      );
+    }
+    if (mounted) await _load();
+  }
+
   void _openDay(DateTime date) {
     showModalBottomSheet(
       context: context,
@@ -176,6 +194,41 @@ class _ClientScheduleScreenState extends State<ClientScheduleScreen> {
                       _changeVisit(a, date, remove: false);
                     },
                   ),
+                const SizedBox(height: 8),
+                const Text(
+                  'Schedule from this day',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: AppTheme.textSecondary,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: () {
+                          Navigator.pop(ctx);
+                          _schedule(startDate: date);
+                        },
+                        icon: const Icon(Icons.person_add_alt, size: 18),
+                        label: const Text('One caregiver'),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: () {
+                          Navigator.pop(ctx);
+                          _schedule(startDate: date, multiple: true);
+                        },
+                        icon: const Icon(Icons.group_add, size: 18),
+                        label: const Text('Multiple'),
+                      ),
+                    ),
+                  ],
+                ),
               ],
             ),
           ),
@@ -188,6 +241,26 @@ class _ClientScheduleScreenState extends State<ClientScheduleScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: Text('${widget.client.fullName} – Schedule')),
+      floatingActionButton: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          FloatingActionButton.extended(
+            heroTag: 'scheduleMultiple',
+            backgroundColor: AppTheme.successColor,
+            onPressed: () => _schedule(multiple: true),
+            icon: const Icon(Icons.group_add),
+            label: const Text('Multiple Caregivers'),
+          ),
+          const SizedBox(height: 10),
+          FloatingActionButton.extended(
+            heroTag: 'scheduleCaregiver',
+            onPressed: () => _schedule(),
+            icon: const Icon(Icons.add),
+            label: const Text('Schedule Caregiver'),
+          ),
+        ],
+      ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : _error != null
@@ -200,7 +273,7 @@ class _ClientScheduleScreenState extends State<ClientScheduleScreen> {
               : RefreshIndicator(
                   onRefresh: _load,
                   child: ListView(
-                    padding: const EdgeInsets.fromLTRB(8, 8, 8, 24),
+                    padding: const EdgeInsets.fromLTRB(8, 8, 8, 160),
                     children: [
                       _buildMonthHeader(),
                       const SizedBox(height: 8),
@@ -336,7 +409,7 @@ class _ClientScheduleScreenState extends State<ClientScheduleScreen> {
                               ],
                             ),
                             const SizedBox(height: 2),
-                            for (final a in visits.take(2))
+                            for (final a in visits)
                               Padding(
                                 padding: const EdgeInsets.only(bottom: 3),
                                 child: Column(
@@ -365,15 +438,6 @@ class _ClientScheduleScreenState extends State<ClientScheduleScreen> {
                                       ),
                                     ),
                                   ],
-                                ),
-                              ),
-                            if (visits.length > 2)
-                              Text(
-                                '+${visits.length - 2} more',
-                                style: const TextStyle(
-                                  fontSize: 8,
-                                  fontWeight: FontWeight.w600,
-                                  color: AppTheme.primaryColor,
                                 ),
                               ),
                           ],
