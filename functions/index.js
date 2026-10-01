@@ -1,7 +1,92 @@
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
+const { onSchedule } = require("firebase-functions/v2/scheduler");
 const admin = require("firebase-admin");
+const {
+  AGENCY_TIME_ZONE,
+  startOfZonedDay,
+  findMissedShifts,
+} = require("./missed_clockins");
 
 admin.initializeApp();
+
+exports.checkMissedClockIns = onSchedule(
+  { schedule: "every 5 minutes", timeZone: AGENCY_TIME_ZONE },
+  async () => {
+    const db = admin.firestore();
+    const now = new Date();
+
+    const [assignmentSnap, clockSnap] = await Promise.all([
+      db.collection("assignments").where("isActive", "==", true).get(),
+      db.collection("clock_records")
+        .where("clockInTime", ">=",
+          admin.firestore.Timestamp.fromDate(
+            startOfZonedDay(now, AGENCY_TIME_ZONE)))
+        .get(),
+    ]);
+
+    const clockedIn = new Set(
+      clockSnap.docs.map((d) => d.data().assignmentId).filter(Boolean));
+    const missed = findMissedShifts({
+      now,
+      assignments: assignmentSnap.docs.map((d) => ({ id: d.id, ...d.data() })),
+      clockedInAssignmentIds: clockedIn,
+    });
+    if (missed.length === 0) return;
+
+    const adminSnap = await db.collection("users")
+      .where("role", "==", "admin").get();
+    const adminTokens = adminSnap.docs
+      .map((d) => d.data())
+      .filter((u) => u.isActive !== false && typeof u.fcmToken === "string" &&
+        u.fcmToken)
+      .map((u) => u.fcmToken);
+
+    for (const { assignment: a, dateKey, minutesLate } of missed) {
+      const [client, caregiver] = await Promise.all([
+        db.collection("users").doc(a.clientId).get(),
+        db.collection("users").doc(a.caregiverId).get(),
+      ]);
+      if (client.data()?.isActive === false ||
+          caregiver.data()?.isActive === false) continue;
+
+      // create() fails if the doc exists, so each shift alerts only once.
+      try {
+        await db.collection("missed_clockins").doc(`${a.id}_${dateKey}`)
+          .create({
+            assignmentId: a.id,
+            caregiverId: a.caregiverId,
+            caregiverName: a.caregiverName || "",
+            clientId: a.clientId,
+            clientName: a.clientName || "",
+            shiftDate: dateKey,
+            shiftStartTime: a.shiftStartTime,
+            minutesLateWhenDetected: minutesLate,
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          });
+      } catch (e) {
+        if (e.code === 6) continue; // ALREADY_EXISTS
+        throw e;
+      }
+
+      if (adminTokens.length === 0) continue;
+      await admin.messaging().sendEachForMulticast({
+        tokens: adminTokens,
+        notification: {
+          title: "Missed clock-in",
+          body: `${a.caregiverName || "A caregiver"} hasn't clocked in for ` +
+            `${a.clientName || "a client"} (shift started ${a.shiftStartTime}).`,
+        },
+        data: { type: "missed_clockin", assignmentId: a.id, chatId: "",
+          callId: "" },
+        android: {
+          priority: "high",
+          notification: { channelId: "messages_channel", sound: "default" },
+        },
+        apns: { payload: { aps: { sound: "default" } } },
+      });
+    }
+  },
+);
 
 exports.resetUserPassword = onCall(async (request) => {
   // Only allow authenticated admin users
