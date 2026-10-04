@@ -51,7 +51,7 @@ class DefaultFirebaseOptions {
 
   static const FirebaseOptions android = FirebaseOptions(
     apiKey: 'AIzaSyBYM2GNx7jj7y5FcaELNge4qrMj68fVz5M',
-    appId: '1:910047088378:android:6b06dc6c738362a8a78343',
+    appId: '1:910047088378:android:d74312825b36132ca78343',
     messagingSenderId: '910047088378',
     projectId: 'mega-h',
     storageBucket: 'mega-h.firebasestorage.app',
@@ -59,10 +59,10 @@ class DefaultFirebaseOptions {
 
   static const FirebaseOptions ios = FirebaseOptions(
     apiKey: 'AIzaSyDCOEbh1Z0scCY3DYXaHukTp8AVq8Up168',
-    appId: '1:910047088378:ios:fa359930902a8b43a78343',
+    appId: '1:910047088378:ios:c4c76a941607cd33a78343',
     messagingSenderId: '910047088378',
     projectId: 'mega-h',
     storageBucket: 'mega-h.firebasestorage.app',
-    iosBundleId: 'com.appsbyfazil.homecare',
+    iosBundleId: 'com.megahomecare.app',
   );
 }

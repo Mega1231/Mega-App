@@ -52,6 +52,10 @@ flutter_native_splash:
 
 flutter:
   uses-material-design: true
+  # Plugins come from CocoaPods; building them through SwiftPM as well makes
+  # the iOS archive fail with "Multiple commands produce ... .framework".
+  config:
+    enable-swift-package-manager: false
   assets:
     - .env
     - assets/
