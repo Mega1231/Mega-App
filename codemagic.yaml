@@ -1,0 +1,66 @@
+workflows:
+  ios-release:
+    name: iOS release (TestFlight)
+    max_build_duration: 90
+    instance_type: mac_mini_m2
+
+    # Started manually from the Codemagic UI, so a push to main never
+    # uploads a build by itself.
+
+    integrations:
+      # Name of the App Store Connect API key integration in Codemagic
+      # (Teams → Integrations → App Store Connect) for the Mega Homecare Inc
+      # Apple team, not the key's name in App Store Connect.
+      app_store_connect: MegaHomecare
+
+    environment:
+      flutter: 3.44.8
+      xcode: latest
+      cocoapods: default
+      groups:
+        # Secret variables AGORA_APP_ID and GOOGLE_MAPS_API_KEY
+        # (Codemagic app → Environment variables → group "mega_env").
+        - mega_env
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: com.megahomecare.app
+      vars:
+        BUNDLE_ID: com.megahomecare.app
+
+    cache:
+      cache_paths:
+        - ~/.pub-cache
+
+    scripts:
+      # .env is gitignored but bundled as a Flutter asset, so the build
+      # fails without it.
+      - name: Create .env
+        script: |
+          printf 'AGORA_APP_ID=%s\nGOOGLE_MAPS_API_KEY=%s\n' \
+            "$AGORA_APP_ID" "$GOOGLE_MAPS_API_KEY" > .env
+
+      - name: Get dependencies
+        script: flutter pub get
+
+      - name: Install pods
+        script: cd ios && pod install
+
+      # Codemagic fetches (or creates once and then reuses) the App Store
+      # distribution certificate and profile from ios_signing above.
+      - name: Apply provisioning profile to Xcode project
+        script: xcode-project use-profiles
+
+      - name: Build IPA
+        script: |
+          flutter build ipa --release \
+            --build-number=$BUILD_NUMBER \
+            --export-options-plist=/Users/builder/export_options.plist
+
+    artifacts:
+      - build/ios/ipa/*.ipa
+      - /tmp/xcodebuild_logs/*.log
+
+    publishing:
+      app_store_connect:
+        auth: integration
+        submit_to_testflight: true
