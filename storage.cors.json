@@ -1,0 +1,11 @@
+[
+  {
+    "origin": [
+      "https://mega-h.web.app",
+      "https://mega-h.firebaseapp.com",
+      "http://localhost:5055"
+    ],
+    "method": ["GET"],
+    "maxAgeSeconds": 3600
+  }
+]

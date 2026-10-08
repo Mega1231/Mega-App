@@ -4,14 +4,14 @@
       "android": {
         "default": {
           "projectId": "mega-h",
-          "appId": "1:910047088378:android:6b06dc6c738362a8a78343",
+          "appId": "1:910047088378:android:d74312825b36132ca78343",
           "fileOutput": "android/app/google-services.json"
         }
       },
       "ios": {
         "default": {
           "projectId": "mega-h",
-          "appId": "1:910047088378:ios:fa359930902a8b43a78343",
+          "appId": "1:910047088378:ios:c4c76a941607cd33a78343",
           "uploadDebugSymbols": false,
           "fileOutput": "ios/Runner/GoogleService-Info.plist"
         }
@@ -20,8 +20,9 @@
         "lib/firebase_options.dart": {
           "projectId": "mega-h",
           "configurations": {
-            "android": "1:910047088378:android:6b06dc6c738362a8a78343",
-            "ios": "1:910047088378:ios:fa359930902a8b43a78343"
+            "android": "1:910047088378:android:d74312825b36132ca78343",
+            "ios": "1:910047088378:ios:c4c76a941607cd33a78343",
+            "web": "1:910047088378:web:d040cb95baa45c6ca78343"
           }
         }
       }
@@ -30,5 +31,33 @@
   "functions": {
     "source": "functions",
     "runtime": "nodejs22"
+  },
+  "hosting": {
+    "public": "build/web",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ],
+    "rewrites": [
+      {
+        "source": "**",
+        "destination": "/index.html"
+      }
+    ],
+    "headers": [
+      {
+        "source": "/@(index.html|flutter_bootstrap.js|flutter_service_worker.js|main.dart.js|version.json)",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-cache"
+          }
+        ]
+      }
+    ],
+    "predeploy": [
+      "fvm flutter build web --release --dart-define-from-file .env.web"
+    ]
   }
 }

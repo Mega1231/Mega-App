@@ -6,3 +6,5 @@ build/
 # FVM Version Cache
 .fvm/
 .env
+.env.web
+.firebase/
