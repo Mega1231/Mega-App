@@ -9,6 +9,8 @@ const {
 
 admin.initializeApp();
 
+Object.assign(exports, require("./applications"));
+
 exports.checkMissedClockIns = onSchedule(
   { schedule: "every 5 minutes", timeZone: AGENCY_TIME_ZONE },
   async () => {

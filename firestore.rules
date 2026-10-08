@@ -1,0 +1,14 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Signed-in users, except caregiver applications and server secrets,
+    // which only Cloud Functions read and write.
+    match /{collection}/{document=**} {
+      allow read, write: if request.auth != null
+        && !(collection in ['applications', 'app_secrets']);
+    }
+    match /password_reset_requests/{requestId} {
+      allow create: if true;
+    }
+  }
+}
