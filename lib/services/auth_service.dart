@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -110,9 +111,12 @@ class AuthService {
   /// Admin creates a new user account
   /// Uses a secondary Firebase App so the admin stays logged in
   /// Upload user profile photo and return the download URL
-  Future<String> uploadProfilePhoto(String uid, File photo) async {
+  Future<String> uploadProfilePhoto(String uid, File photo) async =>
+      uploadProfilePhotoBytes(uid, await photo.readAsBytes());
+
+  /// Byte-based upload, used by the web admin (no dart:io File there).
+  Future<String> uploadProfilePhotoBytes(String uid, Uint8List bytes) async {
     final ref = _storage.ref().child('profile_photos/$uid.jpg');
-    final bytes = await photo.readAsBytes();
     await ref.putData(bytes, SettableMetadata(contentType: 'image/jpeg'));
     return await ref.getDownloadURL();
   }
@@ -129,6 +133,8 @@ class AuthService {
     File? photo,
     File? noteFile,
     String? noteFileName,
+    Uint8List? photoBytes,
+    Uint8List? noteBytes,
   }) async {
     final data = <String, dynamic>{
       'fullName': fullName,
@@ -139,14 +145,15 @@ class AuthService {
     if (latitude != null) data['latitude'] = latitude;
     if (longitude != null) data['longitude'] = longitude;
 
-    if (photo != null) {
-      final photoUrl = await uploadProfilePhoto(uid, photo);
-      data['photoUrl'] = photoUrl;
+    final photoData = photoBytes ?? await photo?.readAsBytes();
+    if (photoData != null) {
+      data['photoUrl'] = await uploadProfilePhotoBytes(uid, photoData);
     }
 
-    if (noteFile != null && noteFileName != null) {
-      final noteUrl = await uploadClientNote(uid, noteFile, noteFileName);
-      data['clientNoteUrl'] = noteUrl;
+    final noteData = noteBytes ?? await noteFile?.readAsBytes();
+    if (noteData != null && noteFileName != null) {
+      data['clientNoteUrl'] =
+          await uploadClientNoteBytes(uid, noteData, noteFileName);
       data['clientNoteFileName'] = noteFileName;
     }
 
@@ -154,17 +161,23 @@ class AuthService {
   }
 
   /// Update user's profile photo: upload to Storage and update Firestore
-  Future<String> updateUserProfilePhoto(String uid, File photo) async {
-    final photoUrl = await uploadProfilePhoto(uid, photo);
+  Future<String> updateUserProfilePhoto(String uid, File photo) async =>
+      updateUserProfilePhotoBytes(uid, await photo.readAsBytes());
+
+  Future<String> updateUserProfilePhotoBytes(String uid, Uint8List bytes) async {
+    final photoUrl = await uploadProfilePhotoBytes(uid, bytes);
     await _firestore.collection('users').doc(uid).update({'photoUrl': photoUrl});
     return photoUrl;
   }
 
   /// Upload a client note file (PDF, image, doc) and return the download URL.
-  Future<String> uploadClientNote(String uid, File file, String fileName) async {
+  Future<String> uploadClientNote(String uid, File file, String fileName) async =>
+      uploadClientNoteBytes(uid, await file.readAsBytes(), fileName);
+
+  Future<String> uploadClientNoteBytes(
+      String uid, Uint8List bytes, String fileName) async {
     final ext = fileName.split('.').last.toLowerCase();
     final ref = _storage.ref().child('client_notes/$uid/$fileName');
-    final bytes = await file.readAsBytes();
 
     String contentType = 'application/octet-stream';
     if (ext == 'pdf') contentType = 'application/pdf';
@@ -190,6 +203,8 @@ class AuthService {
     File? photo,
     File? noteFile,
     String noteFileName = '',
+    Uint8List? photoBytes,
+    Uint8List? noteBytes,
   }) async {
     final email = _usernameToEmail(username);
 
@@ -229,14 +244,16 @@ class AuthService {
 
       // Upload photo if provided
       String photoUrl = '';
-      if (photo != null) {
-        photoUrl = await uploadProfilePhoto(uid, photo);
+      final photoData = photoBytes ?? await photo?.readAsBytes();
+      if (photoData != null) {
+        photoUrl = await uploadProfilePhotoBytes(uid, photoData);
       }
 
       // Upload client note file if provided
       String clientNoteUrl = '';
-      if (noteFile != null && noteFileName.isNotEmpty) {
-        clientNoteUrl = await uploadClientNote(uid, noteFile, noteFileName);
+      final noteData = noteBytes ?? await noteFile?.readAsBytes();
+      if (noteData != null && noteFileName.isNotEmpty) {
+        clientNoteUrl = await uploadClientNoteBytes(uid, noteData, noteFileName);
       }
 
       // Save user profile in Firestore
@@ -512,6 +529,24 @@ class AuthService {
       'requestedAt': FieldValue.serverTimestamp(),
       'status': 'pending',
     });
+  }
+
+  /// Change the signed-in user's own password. Firebase requires a recent
+  /// sign-in, so the current password is checked first.
+  Future<void> changeOwnPassword({
+    required String currentPassword,
+    required String newPassword,
+  }) async {
+    final user = _auth.currentUser;
+    if (user == null || user.email == null) {
+      throw FirebaseAuthException(code: 'no-current-user');
+    }
+    final credential = EmailAuthProvider.credential(
+      email: user.email!,
+      password: currentPassword,
+    );
+    await user.reauthenticateWithCredential(credential);
+    await user.updatePassword(newPassword);
   }
 
   /// Reset a user's password (admin action).

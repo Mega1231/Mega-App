@@ -357,7 +357,7 @@ class _CaregiverHomeState extends State<_CaregiverHome> {
                     const SizedBox(height: 24),
 
                     // All assigned clients
-                    if (vm.assignments.isNotEmpty) ...[
+                    if (vm.clientsThisWeek.isNotEmpty) ...[
                       const Text(
                         'Your Clients',
                         style: TextStyle(
@@ -367,7 +367,7 @@ class _CaregiverHomeState extends State<_CaregiverHome> {
                         ),
                       ),
                       const SizedBox(height: 12),
-                      ...vm.assignments.map(
+                      ...vm.clientsThisWeek.map(
                         (a) => _ClientTile(
                           assignment: a,
                           clientProfile: vm.clientProfiles[a.clientId],

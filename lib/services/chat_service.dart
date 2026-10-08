@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import '../models/chat_room.dart';
@@ -194,14 +195,19 @@ class ChatService {
     required String senderId,
     required String senderName,
     required String receiverId,
-    required File imageFile,
+    File? imageFile,
+    Uint8List? imageBytes,
   }) async {
+    assert(imageFile != null || imageBytes != null);
     // Upload image to Firebase Storage
     final timestamp = DateTime.now().millisecondsSinceEpoch;
     final ref = _storage
         .ref()
         .child('chat_images/$chatId/${senderId}_$timestamp.jpg');
-    await ref.putFile(imageFile);
+    await ref.putData(
+      imageBytes ?? await imageFile!.readAsBytes(),
+      SettableMetadata(contentType: 'image/jpeg'),
+    );
     final imageUrl = await ref.getDownloadURL();
 
     final batch = _firestore.batch();
@@ -435,13 +441,18 @@ class ChatService {
     required String senderId,
     required String senderName,
     required List<String> participantIds,
-    required File imageFile,
+    File? imageFile,
+    Uint8List? imageBytes,
   }) async {
+    assert(imageFile != null || imageBytes != null);
     final timestamp = DateTime.now().millisecondsSinceEpoch;
     final ref = _storage
         .ref()
         .child('chat_images/$chatId/${senderId}_$timestamp.jpg');
-    await ref.putFile(imageFile);
+    await ref.putData(
+      imageBytes ?? await imageFile!.readAsBytes(),
+      SettableMetadata(contentType: 'image/jpeg'),
+    );
     final imageUrl = await ref.getDownloadURL();
 
     final batch = _firestore.batch();

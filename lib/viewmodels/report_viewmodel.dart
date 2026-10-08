@@ -29,6 +29,17 @@ class ReportViewModel extends ChangeNotifier {
 
   DocumentSnapshot? _lastDoc;
 
+  /// Show an already-fetched set of reports (e.g. one day picked on the
+  /// reports calendar). Nothing more to page in.
+  void showReports(List<ShiftReport> reports) {
+    _reports = reports;
+    _lastDoc = null;
+    _hasMore = false;
+    _isLoading = false;
+    _error = null;
+    notifyListeners();
+  }
+
   /// Load reports for a caregiver
   Future<void> loadCaregiverReports(String caregiverId) async {
     _isLoading = true;

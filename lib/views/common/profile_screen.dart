@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import '../../widgets/change_password_dialog.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
@@ -160,6 +161,25 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                   const SizedBox(height: 24),
                   if (user.role == 'admin') ...[
+                    const _SectionTitle('Security'),
+                    _Section(
+                      children: [
+                        _LinkTile(
+                          icon: Icons.lock_reset,
+                          iconColor: AppTheme.warningColor,
+                          label: 'Change Password',
+                          onTap: () async {
+                            final changed = await showChangePasswordDialog(context);
+                            if (changed && context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('Password changed')),
+                              );
+                            }
+                          },
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 24),
                     const _SectionTitle('App'),
                     _Section(
                       children: [

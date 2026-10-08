@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:open_file/open_file.dart';
 import 'package:provider/provider.dart';
 import '../../services/pdf_service.dart';
 import '../../services/report_service.dart';
 import '../../theme/app_theme.dart';
 import '../../viewmodels/report_viewmodel.dart';
+import '../../widgets/reports_calendar.dart';
 import '../common/report_list_widget.dart';
 
 class AdminReportsScreen extends StatefulWidget {
@@ -17,12 +19,13 @@ class AdminReportsScreen extends StatefulWidget {
 class _AdminReportsScreenState extends State<AdminReportsScreen> {
   late ReportViewModel _reportVm;
   bool _isDownloading = false;
+  DateTime _day = DateUtils.dateOnly(DateTime.now());
 
   @override
   void initState() {
     super.initState();
+    // The calendar loads the month and hands over the selected day.
     _reportVm = ReportViewModel();
-    _reportVm.loadAllReports();
   }
 
   @override
@@ -151,10 +154,41 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
             ),
           ],
         ),
-        body: ReportListWidget(
-          emptyMessage: 'No shift reports submitted yet.',
-          onLoadMore: () => _reportVm.loadMoreAllReports(),
-          groupByDay: true,
+        body: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+              child: ReportsCalendar(
+                onDaySelected: (day, reports) {
+                  setState(() => _day = day);
+                  _reportVm.showReports(reports);
+                },
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
+              child: Row(
+                children: [
+                  Text(
+                    DateFormat('EEEE, MMM d').format(_day),
+                    style: const TextStyle(
+                        fontSize: 16, fontWeight: FontWeight.w700),
+                  ),
+                  const Spacer(),
+                  Text(
+                    '${_reportVm.reports.length} report${_reportVm.reports.length == 1 ? '' : 's'}',
+                    style: const TextStyle(
+                        fontSize: 13, color: AppTheme.textSecondary),
+                  ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: ReportListWidget(
+                emptyMessage: 'No shift reports on this day.',
+              ),
+            ),
+          ],
         ),
       ),
     );

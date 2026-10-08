@@ -9,13 +9,21 @@ import 'assignments_screen.dart';
 
 const _caregiverColor = Color(0xFFE91E63);
 
-/// Month calendar of one client's visits. Tapping a day lets the admin
-/// remove (or restore) a single caregiver visit without touching the rest
-/// of the recurring assignment.
+/// Month calendar of one client's visits — or, with [byCaregiver], of one
+/// caregiver's visits across clients. Tapping a day lets the admin edit a
+/// visit's schedule, or remove (restore) a single day without touching the
+/// rest of the recurring assignment.
 class ClientScheduleScreen extends StatefulWidget {
+  /// The client, or the caregiver when [byCaregiver] is true.
   final AppUser client;
+  final bool byCaregiver;
 
-  const ClientScheduleScreen({super.key, required this.client});
+  const ClientScheduleScreen({super.key, required this.client})
+      : byCaregiver = false;
+
+  const ClientScheduleScreen.forCaregiver({super.key, required AppUser caregiver})
+      : client = caregiver,
+        byCaregiver = true;
 
   @override
   State<ClientScheduleScreen> createState() => _ClientScheduleScreenState();
@@ -42,7 +50,9 @@ class _ClientScheduleScreenState extends State<ClientScheduleScreen> {
       _error = null;
     });
     try {
-      _assignments = await _service.getClientAssignments(widget.client.uid);
+      _assignments = widget.byCaregiver
+          ? await _service.getCaregiverAssignments(widget.client.uid)
+          : await _service.getClientAssignments(widget.client.uid);
     } catch (e) {
       _error = 'Failed to load schedule: $e';
     }
@@ -68,7 +78,12 @@ class _ClientScheduleScreenState extends State<ClientScheduleScreen> {
 
   List<Assignment> _visitsOn(DateTime date) =>
       _assignments.where((a) => a.isScheduledOn(date)).toList()
-        ..sort((a, b) => a.caregiverName.compareTo(b.caregiverName));
+        ..sort((a, b) => _label(a).compareTo(_label(b)));
+
+  /// Who to show for a visit: the caregiver on a client's calendar, the
+  /// client on a caregiver's calendar.
+  String _label(Assignment a) =>
+      widget.byCaregiver ? a.clientName : a.caregiverName;
 
   List<Assignment> _removedOn(DateTime date) =>
       _assignments.where((a) => a.isExcludedOn(date)).toList();
@@ -88,7 +103,7 @@ class _ClientScheduleScreenState extends State<ClientScheduleScreen> {
         builder: (ctx) => AlertDialog(
           title: const Text('Remove this visit?'),
           content: Text(
-              'Remove ${a.caregiverName} from $dayText? Only this day is removed — the rest of the schedule stays.'),
+              'Remove ${a.caregiverName} → ${a.clientName} on $dayText? Only this day is removed — the rest of the schedule stays.'),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx, false),
@@ -142,6 +157,11 @@ class _ClientScheduleScreenState extends State<ClientScheduleScreen> {
     if (mounted) await _load();
   }
 
+  Future<void> _edit(Assignment a, DateTime date) async {
+    await showEditScheduleSheet(context, a, changeFrom: date);
+    if (mounted) await _load();
+  }
+
   void _openDay(DateTime date) {
     showModalBottomSheet(
       context: context,
@@ -174,6 +194,7 @@ class _ClientScheduleScreenState extends State<ClientScheduleScreen> {
                 for (final a in visits)
                   _DayVisitTile(
                     assignment: a,
+                    name: _label(a),
                     shift: _shiftLabel(a),
                     actionLabel: 'Remove',
                     actionColor: AppTheme.errorColor,
@@ -181,10 +202,15 @@ class _ClientScheduleScreenState extends State<ClientScheduleScreen> {
                       Navigator.pop(ctx);
                       _changeVisit(a, date, remove: true);
                     },
+                    onEdit: () {
+                      Navigator.pop(ctx);
+                      _edit(a, date);
+                    },
                   ),
                 for (final a in removed)
                   _DayVisitTile(
                     assignment: a,
+                    name: _label(a),
                     shift: 'Removed for this day',
                     removed: true,
                     actionLabel: 'Restore',
@@ -194,6 +220,7 @@ class _ClientScheduleScreenState extends State<ClientScheduleScreen> {
                       _changeVisit(a, date, remove: false);
                     },
                   ),
+                if (!widget.byCaregiver) ...[
                 const SizedBox(height: 8),
                 const Text(
                   'Schedule from this day',
@@ -229,6 +256,7 @@ class _ClientScheduleScreenState extends State<ClientScheduleScreen> {
                     ),
                   ],
                 ),
+                ],
               ],
             ),
           ),
@@ -241,7 +269,7 @@ class _ClientScheduleScreenState extends State<ClientScheduleScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: Text('${widget.client.fullName} – Schedule')),
-      floatingActionButton: Column(
+      floatingActionButton: widget.byCaregiver ? null : Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
@@ -282,7 +310,7 @@ class _ClientScheduleScreenState extends State<ClientScheduleScreen> {
                       const Padding(
                         padding: EdgeInsets.symmetric(horizontal: 8),
                         child: Text(
-                          'Tap a day to remove or restore a caregiver visit for that day only.',
+                          'Tap a day to edit a visit, or to remove or restore it for that day only.',
                           style: TextStyle(
                               fontSize: 12, color: AppTheme.textSecondary),
                         ),
@@ -415,7 +443,7 @@ class _ClientScheduleScreenState extends State<ClientScheduleScreen> {
                                 child: Column(
                                   children: [
                                     Text(
-                                      a.caregiverName,
+                                      _label(a),
                                       maxLines: 2,
                                       overflow: TextOverflow.ellipsis,
                                       textAlign: TextAlign.center,
@@ -456,24 +484,27 @@ class _ClientScheduleScreenState extends State<ClientScheduleScreen> {
 
 class _DayVisitTile extends StatelessWidget {
   final Assignment assignment;
+  final String name;
   final String shift;
   final bool removed;
   final String actionLabel;
   final Color actionColor;
   final VoidCallback onAction;
+  final VoidCallback? onEdit;
 
   const _DayVisitTile({
     required this.assignment,
+    required this.name,
     required this.shift,
     this.removed = false,
     required this.actionLabel,
     required this.actionColor,
     required this.onAction,
+    this.onEdit,
   });
 
   @override
   Widget build(BuildContext context) {
-    final name = assignment.caregiverName;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),
       child: Row(
@@ -518,6 +549,11 @@ class _DayVisitTile extends StatelessWidget {
               ],
             ),
           ),
+          if (onEdit != null)
+            TextButton(
+              onPressed: onEdit,
+              child: const Text('Edit'),
+            ),
           TextButton(
             onPressed: onAction,
             style: TextButton.styleFrom(foregroundColor: actionColor),

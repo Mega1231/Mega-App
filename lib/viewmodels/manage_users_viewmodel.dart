@@ -35,7 +35,49 @@ class ManageUsersViewModel extends ChangeNotifier {
   Set<String> get resetRequests => _resetRequests;
   bool hasResetRequest(AppUser user) => _resetRequests.contains(user.username);
 
-  ManageUsersViewModel({required this.role});
+  ManageUsersViewModel({required this.role, String initialFilter = 'all'})
+      : _filter = initialFilter;
+
+  // ── Search & filter (applied to the fully loaded list) ──
+  String _filter; // 'all' | 'active' | 'inactive'
+  String _query = '';
+  String get filter => _filter;
+  String get query => _query;
+
+  void setFilter(String value) {
+    _filter = value;
+    notifyListeners();
+  }
+
+  void setQuery(String value) {
+    _query = value;
+    notifyListeners();
+  }
+
+  /// Users matching the current filter and search text.
+  List<AppUser> get visibleUsers {
+    final q = _query.trim().toLowerCase();
+    return _users.where((u) {
+      if (_filter == 'active' && !u.isActive) return false;
+      if (_filter == 'inactive' && u.isActive) return false;
+      if (q.isEmpty) return true;
+      return u.fullName.toLowerCase().contains(q) ||
+          u.username.toLowerCase().contains(q) ||
+          u.address.toLowerCase().contains(q) ||
+          u.phone.contains(q);
+    }).toList();
+  }
+
+  /// Loads every page so search and filters cover all users, not just the
+  /// first page. The agency has tens of users, not thousands.
+  Future<void> loadAllUsers() async {
+    await loadUsers();
+    while (_hasMore) {
+      final before = _users.length;
+      await loadMore();
+      if (_users.length == before) break;
+    }
+  }
 
   /// Initial fetch
   Future<void> loadUsers() async {
@@ -139,7 +181,7 @@ class ManageUsersViewModel extends ChangeNotifier {
   Future<void> refresh() async {
     _lastDoc = null;
     _hasMore = true;
-    await loadUsers();
+    await loadAllUsers();
   }
 
   /// Delete user completely

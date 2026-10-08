@@ -1,7 +1,9 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import '../models/app_user.dart';
 import '../services/auth_service.dart';
@@ -59,6 +61,9 @@ class AuthViewModel extends ChangeNotifier {
   /// getToken() throws on iOS simulators (no APNs token) and when
   /// notification services are unavailable.
   Future<void> _setupFcmToken(String uid) async {
+    // A user has one fcmToken (their phone). The web admin must not
+    // overwrite it, or the admin's phone stops getting pushes.
+    if (kIsWeb) return;
     try {
       await FirebaseMessaging.instance.requestPermission();
       await _authService.saveFcmToken(uid);
@@ -93,7 +98,7 @@ class AuthViewModel extends ChangeNotifier {
 
   /// Logout
   Future<void> logout() async {
-    if (_currentUser != null) {
+    if (_currentUser != null && !kIsWeb) {
       try {
         await _authService.removeFcmToken(_currentUser!.uid);
       } catch (_) {}
@@ -114,6 +119,15 @@ class AuthViewModel extends ChangeNotifier {
     notifyListeners();
     return newUrl;
   }
+  /// Web: upload picked image bytes as the profile photo.
+  Future<String> updateProfilePhotoBytes(Uint8List bytes) async {
+    final newUrl =
+        await _authService.updateUserProfilePhotoBytes(_currentUser!.uid, bytes);
+    _currentUser = await _authService.getCurrentUser();
+    notifyListeners();
+    return newUrl;
+  }
+
 
   void clearError() {
     _error = null;

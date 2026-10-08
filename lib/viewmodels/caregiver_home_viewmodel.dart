@@ -70,6 +70,19 @@ class CaregiverHomeViewModel extends ChangeNotifier {
     await loadData();
   }
 
+  /// One assignment per client among those scheduled this week, so a
+  /// client the caregiver no longer visits drops off their list.
+  List<Assignment> get clientsThisWeek {
+    final now = DateTime.now();
+    final byClient = <String, Assignment>{};
+    for (final a in _assignments) {
+      if (a.isScheduledInWeekOf(now)) byClient.putIfAbsent(a.clientId, () => a);
+    }
+    return byClient.values.toList()
+      ..sort((a, b) =>
+          a.clientName.toLowerCase().compareTo(b.clientName.toLowerCase()));
+  }
+
   /// Assignments with a visit on [date], sorted by shift start time.
   List<Assignment> getAssignmentsForDate(DateTime date) {
     final filtered =

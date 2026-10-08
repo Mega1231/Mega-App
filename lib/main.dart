@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:provider/provider.dart';
@@ -13,24 +14,33 @@ import 'views/admin/admin_dashboard.dart';
 import 'views/caregiver/caregiver_dashboard.dart';
 import 'views/client/client_dashboard.dart';
 import 'views/family/family_dashboard.dart';
+import 'web/admin_web_shell.dart';
+import 'web/web_login_screen.dart';
 import 'widgets/incoming_call_listener.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await dotenv.load(fileName: '.env');
+  // .env holds mobile secrets (Agora App ID, Maps key). The web admin never
+  // loads it; its Maps key comes from --dart-define-from-file=.env.web.
+  if (!kIsWeb) await dotenv.load(fileName: '.env');
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
 
   // FCM background handler must be registered before runApp
-  FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
+  if (!kIsWeb) {
+    FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
+  }
 
-  // Enable Firestore offline persistence for offline message queuing
+  // Enable Firestore offline persistence for offline message queuing.
+  // Not on web: the admin panel is always online, and the IndexedDB cache
+  // delays the first reads by several seconds.
   FirebaseFirestore.instance.settings = const Settings(
-    persistenceEnabled: true,
+    persistenceEnabled: !kIsWeb,
     cacheSizeBytes: Settings.CACHE_SIZE_UNLIMITED,
   );
 
-  // Initialize notification service
-  await NotificationService().initialize();
+  // Push and call notifications are mobile-only; the web build is the
+  // admin panel.
+  if (!kIsWeb) await NotificationService().initialize();
 
   runApp(const MegaHomeCareApp());
 }
@@ -45,7 +55,7 @@ class MegaHomeCareApp extends StatelessWidget {
       child: GestureDetector(
         onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
         child: MaterialApp(
-          title: 'Mega Homecare Inc',
+          title: kIsWeb ? 'Mega Homecare Admin' : 'Mega Homecare Inc',
           debugShowCheckedModeBanner: false,
           theme: AppTheme.theme,
           home: const AuthGate(),
@@ -67,10 +77,16 @@ class AuthGate extends StatelessWidget {
     }
 
     if (authVm.currentUser == null) {
-      return const LoginScreen();
+      return kIsWeb ? const WebLoginScreen() : const LoginScreen();
     }
 
     final user = authVm.currentUser!;
+
+    if (kIsWeb) {
+      return user.role == 'admin'
+          ? const AdminWebShell()
+          : const WebAdminOnlyScreen();
+    }
 
     Widget dashboard;
     switch (user.role) {

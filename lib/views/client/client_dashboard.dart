@@ -1,15 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../models/app_user.dart';
 import '../../theme/app_theme.dart';
 import '../../viewmodels/auth_viewmodel.dart';
 import '../../viewmodels/client_home_viewmodel.dart';
+import '../../widgets/care_team_section.dart';
 import '../../widgets/custom_loader.dart';
 import '../common/chat_list_screen.dart';
-import '../common/chat_screen.dart';
 import '../common/profile_screen.dart';
-import '../../services/agora_call_service.dart';
-import '../common/call_screen.dart';
 import 'client_reports_screen.dart';
 
 class ClientDashboard extends StatefulWidget {
@@ -129,261 +126,13 @@ class _ClientHome extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     if (vm.hasCaregiver)
-                      _CaregiverCard(vm: vm)
+                      CareTeamSection(caregivers: vm.caregivers)
                     else
                       _NoCaregiverCard(),
                   ],
                 ),
               ),
             ),
-    );
-  }
-}
-
-class _CaregiverCard extends StatelessWidget {
-  final ClientHomeViewModel vm;
-  const _CaregiverCard({required this.vm});
-
-  @override
-  Widget build(BuildContext context) {
-    final authVm = context.read<AuthViewModel>();
-    final currentUser = authVm.currentUser!;
-    final name = vm.caregiverName ?? '';
-    final photo = vm.caregiverPhotoUrl ?? '';
-
-    return Container(
-      width: double.infinity,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: [
-          BoxShadow(
-            color: AppTheme.primaryColor.withValues(alpha: 0.08),
-            blurRadius: 24,
-            offset: const Offset(0, 8),
-          ),
-        ],
-      ),
-      child: Column(
-        children: [
-          // Top section with gradient
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.fromLTRB(24, 28, 24, 24),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  AppTheme.primaryColor,
-                  AppTheme.primaryColor.withValues(alpha: 0.85),
-                  AppTheme.accentColor,
-                ],
-              ),
-              borderRadius: const BorderRadius.vertical(
-                top: Radius.circular(24),
-              ),
-            ),
-            child: Column(
-              children: [
-                Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 5),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.15),
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: const Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.medical_services_outlined,
-                              size: 14, color: Colors.white),
-                          SizedBox(width: 6),
-                          Text(
-                            'Your Caregiver',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: Colors.white,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const Spacer(),
-                    Container(
-                      width: 8,
-                      height: 8,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF4ADE80),
-                        shape: BoxShape.circle,
-                        boxShadow: [
-                          BoxShadow(
-                            color: const Color(0xFF4ADE80)
-                                .withValues(alpha: 0.5),
-                            blurRadius: 6,
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 6),
-                    Text(
-                      'Active',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.white.withValues(alpha: 0.8),
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 24),
-                Container(
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    border: Border.all(
-                      color: Colors.white.withValues(alpha: 0.3),
-                      width: 3,
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.15),
-                        blurRadius: 16,
-                        offset: const Offset(0, 6),
-                      ),
-                    ],
-                  ),
-                  child: CircleAvatar(
-                    radius: 44,
-                    backgroundColor: Colors.white.withValues(alpha: 0.2),
-                    backgroundImage:
-                        photo.isNotEmpty ? NetworkImage(photo) : null,
-                    child: photo.isEmpty
-                        ? Text(
-                            name.isNotEmpty ? name[0].toUpperCase() : '?',
-                            style: const TextStyle(
-                              fontSize: 34,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
-                            ),
-                          )
-                        : null,
-                  ),
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  name,
-                  style: const TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.w700,
-                    color: Colors.white,
-                    letterSpacing: 0.3,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  'Caregiver',
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: Colors.white.withValues(alpha: 0.7),
-                    fontWeight: FontWeight.w400,
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          // Bottom section with contact buttons
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
-            child: Row(
-              children: [
-                Expanded(
-                  child: _ContactButton(
-                    icon: Icons.chat_bubble_rounded,
-                    label: 'Message',
-                    color: AppTheme.primaryColor,
-                    onTap: () {
-                      final caregiverUser = AppUser(
-                        uid: vm.caregiverId ?? '',
-                        username: '',
-                        fullName: name,
-                        role: 'caregiver',
-                        photoUrl: photo,
-                      );
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => ChatScreen(
-                            currentUser: currentUser,
-                            otherUser: caregiverUser,
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _ContactButton(
-                    icon: Icons.call_rounded,
-                    label: 'Call',
-                    color: AppTheme.successColor,
-                    onTap: () {
-                      final cUser = AppUser(
-                        uid: vm.caregiverId ?? '',
-                        username: '',
-                        fullName: name,
-                        role: 'caregiver',
-                        photoUrl: photo,
-                      );
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => CallScreen(
-                            currentUser: currentUser,
-                            otherUser: cUser,
-                            callType: CallType.audio,
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _ContactButton(
-                    icon: Icons.videocam_rounded,
-                    label: 'Video',
-                    color: const Color(0xFF8B5CF6),
-                    onTap: () {
-                      final cUser = AppUser(
-                        uid: vm.caregiverId ?? '',
-                        username: '',
-                        fullName: name,
-                        role: 'caregiver',
-                        photoUrl: photo,
-                      );
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => CallScreen(
-                            currentUser: currentUser,
-                            otherUser: cUser,
-                            callType: CallType.video,
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
     );
   }
 }
@@ -440,56 +189,6 @@ class _NoCaregiverCard extends StatelessWidget {
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _ContactButton extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final Color color;
-  final VoidCallback onTap;
-
-  const _ContactButton({
-    required this.icon,
-    required this.label,
-    required this.color,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 14),
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.06),
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: Column(
-          children: [
-            Container(
-              width: 48,
-              height: 48,
-              decoration: BoxDecoration(
-                color: color.withValues(alpha: 0.1),
-                shape: BoxShape.circle,
-              ),
-              child: Icon(icon, color: color, size: 22),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              label,
-              style: TextStyle(
-                color: color,
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }

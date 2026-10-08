@@ -46,6 +46,32 @@ class Assignment {
     return !isExcludedOn(date);
   }
 
+  /// Whether there is a visit on any day of the Monday–Sunday week that
+  /// [date] falls in. Clients, family and caregivers only see each other
+  /// while they are scheduled together that week.
+  bool isScheduledInWeekOf(DateTime date) {
+    final day = DateTime(date.year, date.month, date.day);
+    final monday = day.subtract(Duration(days: day.weekday - 1));
+    for (var i = 0; i < 7; i++) {
+      if (isScheduledOn(DateTime(monday.year, monday.month, monday.day + i))) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /// One assignment per caregiver among those scheduled this week, by name.
+  static List<Assignment> caregiversThisWeek(Iterable<Assignment> all) {
+    final now = DateTime.now();
+    final byCaregiver = <String, Assignment>{};
+    for (final a in all) {
+      if (a.isScheduledInWeekOf(now)) byCaregiver.putIfAbsent(a.caregiverId, () => a);
+    }
+    return byCaregiver.values.toList()
+      ..sort((a, b) =>
+          a.caregiverName.toLowerCase().compareTo(b.caregiverName.toLowerCase()));
+  }
+
   Assignment({
     required this.id,
     required this.clientId,

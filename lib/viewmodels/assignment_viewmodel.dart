@@ -245,6 +245,18 @@ class AssignmentViewModel extends ChangeNotifier {
     }
   }
 
+  /// Give an assignment to another caregiver from [from] onward.
+  Future<bool> changeCaregiver(
+      String id, AppUser caregiver, DateTime from) async {
+    try {
+      await _service.changeCaregiver(id, caregiver, from);
+      return true;
+    } catch (e) {
+      debugPrint('changeCaregiver error: $e');
+      return false;
+    }
+  }
+
   /// Update schedule
   Future<bool> updateSchedule(
     String id,
@@ -253,6 +265,7 @@ class AssignmentViewModel extends ChangeNotifier {
     String? shiftEndTime,
     DateTime? startDate,
     DateTime? endDate,
+    bool? isLiveIn,
   }) async {
     try {
       await _service.updateSchedule(
@@ -262,6 +275,7 @@ class AssignmentViewModel extends ChangeNotifier {
         shiftEndTime: shiftEndTime,
         startDate: startDate,
         endDate: endDate,
+        isLiveIn: isLiveIn,
       );
       final index = _assignments.indexWhere((a) => a.id == id);
       if (index != -1) {
@@ -284,6 +298,8 @@ class AssignmentViewModel extends ChangeNotifier {
           createdAt: old.createdAt,
           startDate: startDate ?? old.startDate,
           endDate: endDate ?? old.endDate,
+          isLiveIn: isLiveIn ?? old.isLiveIn,
+          excludedDates: old.excludedDates,
         );
         notifyListeners();
       }

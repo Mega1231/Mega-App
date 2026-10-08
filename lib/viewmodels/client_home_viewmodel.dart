@@ -23,7 +23,10 @@ class ClientHomeViewModel extends ChangeNotifier {
   String? get caregiverId => _caregiverId;
   String? get caregiverPhone => _caregiverPhone;
   String? get schedule => _schedule;
-  bool get hasCaregiver => _caregiverName != null;
+  /// Caregivers scheduled with this client this week.
+  List<Assignment> get caregivers => Assignment.caregiversThisWeek(_assignments);
+
+  bool get hasCaregiver => caregivers.isNotEmpty;
 
   ClientHomeViewModel({required this.clientId});
 

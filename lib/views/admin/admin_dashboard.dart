@@ -164,6 +164,7 @@ class _AdminHome extends StatelessWidget {
                     '${dashVm.clientCount}',
                     Icons.people,
                     const Color(0xFF1565C0),
+                    onTap: () => _openUsers(context, 'client', 'all'),
                   ),
                   const SizedBox(width: 12),
                   _buildStatCard(
@@ -171,6 +172,7 @@ class _AdminHome extends StatelessWidget {
                     '${dashVm.caregiverCount}',
                     Icons.medical_services,
                     const Color(0xFF2E7D32),
+                    onTap: () => _openUsers(context, 'caregiver', 'all'),
                   ),
                 ],
               ),
@@ -182,6 +184,7 @@ class _AdminHome extends StatelessWidget {
                     '${dashVm.activeClientCount}',
                     Icons.check_circle,
                     const Color(0xFFF57F17),
+                    onTap: () => _openUsers(context, 'client', 'active'),
                   ),
                   const SizedBox(width: 12),
                   _buildStatCard(
@@ -189,6 +192,7 @@ class _AdminHome extends StatelessWidget {
                     '${dashVm.activeCaregiverCount}',
                     Icons.verified,
                     const Color(0xFF6A1B9A),
+                    onTap: () => _openUsers(context, 'caregiver', 'active'),
                   ),
                 ],
               ),
@@ -200,6 +204,7 @@ class _AdminHome extends StatelessWidget {
                     '${dashVm.inactiveClientCount}',
                     Icons.person_off,
                     const Color(0xFF616161),
+                    onTap: () => _openUsers(context, 'client', 'inactive'),
                   ),
                   const SizedBox(width: 12),
                   _buildStatCard(
@@ -207,6 +212,7 @@ class _AdminHome extends StatelessWidget {
                     '${dashVm.inactiveCaregiverCount}',
                     Icons.block,
                     const Color(0xFFC62828),
+                    onTap: () => _openUsers(context, 'caregiver', 'inactive'),
                   ),
                 ],
               ),
@@ -527,10 +533,28 @@ class _AdminHome extends StatelessWidget {
     return DateFormat('MMM d').format(date);
   }
 
-  Widget _buildStatCard(
-      String title, String value, IconData icon, Color color) {
+  /// Opens the client or caregiver list with a filter applied, then
+  /// refreshes the counts in case something changed there.
+  void _openUsers(BuildContext context, String role, String filter) async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => role == 'client'
+            ? ManageClientsScreen(initialFilter: filter, standalone: true)
+            : ManageCaregiverScreen(initialFilter: filter, standalone: true),
+      ),
+    );
+    if (context.mounted) {
+      context.read<DashboardViewModel>().loadData(forceRefresh: true);
+    }
+  }
+
+  Widget _buildStatCard(String title, String value, IconData icon, Color color,
+      {VoidCallback? onTap}) {
     return Expanded(
-      child: Container(
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
           color: color,
@@ -565,6 +589,7 @@ class _AdminHome extends StatelessWidget {
               ),
             ),
           ],
+        ),
         ),
       ),
     );
@@ -615,6 +640,9 @@ class _GroupsSection extends StatefulWidget {
 class _GroupsSectionState extends State<_GroupsSection> {
   late final Stream<List<ChatRoom>> _groupsStream =
       ChatService().getGroupChatsStream();
+  // Collapsed by default so a long list of groups doesn't take over the
+  // dashboard; the header shows the count and opens the list.
+  bool _expanded = false;
 
   void _openGroup(ChatRoom group) {
     final isMember = group.participants.contains(widget.currentUser.uid);
@@ -644,7 +672,7 @@ class _GroupsSectionState extends State<_GroupsSection> {
               children: [
                 const Expanded(
                   child: Text(
-                    'Groups',
+                    'Group Chats',
                     style: TextStyle(
                       fontSize: 20,
                       fontWeight: FontWeight.bold,
@@ -719,6 +747,35 @@ class _GroupsSectionState extends State<_GroupsSection> {
                 ),
                 child: Column(
                   children: [
+                    ListTile(
+                      onTap: () => setState(() => _expanded = !_expanded),
+                      leading: CircleAvatar(
+                        backgroundColor:
+                            AppTheme.successColor.withValues(alpha: 0.1),
+                        child: const Icon(Icons.forum,
+                            color: AppTheme.successColor),
+                      ),
+                      title: Text(
+                        _expanded ? 'Hide group chats' : 'View all group chats',
+                        style: const TextStyle(fontWeight: FontWeight.w600),
+                      ),
+                      subtitle: Text(
+                        '${groups.length} group${groups.length == 1 ? '' : 's'}'
+                        ' · latest: ${groups.first.groupName}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      trailing: Icon(
+                        _expanded ? Icons.expand_less : Icons.expand_more,
+                        color: AppTheme.textSecondary,
+                      ),
+                    ),
+                    if (_expanded)
+                      Divider(
+                        height: 1,
+                        color: Colors.grey.withValues(alpha: 0.12),
+                      ),
+                    if (_expanded)
                     for (int i = 0; i < groups.length; i++) ...[
                       ListTile(
                         onTap: () => _openGroup(groups[i]),

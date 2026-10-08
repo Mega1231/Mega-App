@@ -15,20 +15,10 @@ class FamilyHomeViewModel extends ChangeNotifier {
   AppUser? get client => _client;
   List<Assignment> get assignments => _assignments;
 
-  /// One assignment per caregiver (a caregiver can have several assignments
-  /// for the same client), sorted by name.
-  List<Assignment> get caregivers {
-    final byCaregiver = <String, Assignment>{};
-    for (final a in _assignments) {
-      byCaregiver.putIfAbsent(a.caregiverId, () => a);
-    }
-    return byCaregiver.values.toList()
-      ..sort((a, b) => a.caregiverName
-          .toLowerCase()
-          .compareTo(b.caregiverName.toLowerCase()));
-  }
+  /// Caregivers scheduled with the client this week.
+  List<Assignment> get caregivers => Assignment.caregiversThisWeek(_assignments);
 
-  bool get hasCaregiver => _assignments.isNotEmpty;
+  bool get hasCaregiver => caregivers.isNotEmpty;
 
   FamilyHomeViewModel({required this.familyUserId});
 

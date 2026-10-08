@@ -1,12 +1,11 @@
-import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import '../models/assignment.dart';
 import '../models/shift_report.dart';
+import 'download/file_download.dart';
 
 class PdfService {
   /// Download image bytes from a URL.
@@ -214,14 +213,9 @@ class PdfService {
       ),
     );
 
-    // Save to temp directory
-    final dir = await getApplicationDocumentsDirectory();
     final fileName =
         'shift_report_${report.clientName.replaceAll(' ', '_')}_${DateFormat('yyyy-MM-dd').format(report.visitDate)}.pdf';
-    final file = File('${dir.path}/$fileName');
-    await file.writeAsBytes(await pdf.save());
-
-    return file.path;
+    return saveGeneratedFile(await pdf.save(), fileName);
   }
 
   /// Generate a professional schedule PDF for a date range and return the file path.
@@ -408,12 +402,9 @@ class PdfService {
       ),
     );
 
-    final dir = await getApplicationDocumentsDirectory();
     final fileName =
         'schedule_${periodLabel.replaceAll(' ', '_')}_${DateFormat('yyyy-MM-dd').format(startDate)}.pdf';
-    final file = File('${dir.path}/$fileName');
-    await file.writeAsBytes(await pdf.save());
-    return file.path;
+    return saveGeneratedFile(await pdf.save(), fileName);
   }
 
   /// Generate a consolidated shift reports PDF and return the file path.
@@ -589,12 +580,9 @@ class PdfService {
       ),
     );
 
-    final dir = await getApplicationDocumentsDirectory();
     final fileName =
         'shift_reports_${periodLabel.replaceAll(' ', '_')}_${DateFormat('yyyy-MM-dd').format(startDate)}.pdf';
-    final file = File('${dir.path}/$fileName');
-    await file.writeAsBytes(await pdf.save());
-    return file.path;
+    return saveGeneratedFile(await pdf.save(), fileName);
   }
 
   /// Client schedule as a month calendar (caregiver name and time per day).
@@ -820,12 +808,9 @@ class PdfService {
       );
     }
 
-    final dir = await getApplicationDocumentsDirectory();
     final fileName =
         'schedule_${clientName.replaceAll(' ', '_')}_${DateFormat('yyyy-MM-dd').format(DateTime.now())}.pdf';
-    final file = File('${dir.path}/$fileName');
-    await file.writeAsBytes(await pdf.save());
-    return file.path;
+    return saveGeneratedFile(await pdf.save(), fileName);
   }
 
   pw.Widget _buildStatCell(String label, String value, PdfColor color) {

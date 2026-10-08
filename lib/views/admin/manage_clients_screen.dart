@@ -9,24 +9,39 @@ import '../../theme/app_theme.dart';
 import '../../viewmodels/manage_users_viewmodel.dart';
 import '../../widgets/custom_loader.dart';
 import '../../widgets/custom_snackbar.dart';
+import '../../widgets/user_list_controls.dart';
 import '../client/client_reports_screen.dart';
 import 'client_schedule_screen.dart';
 import 'create_user_screen.dart';
 
 class ManageClientsScreen extends StatelessWidget {
-  const ManageClientsScreen({super.key});
+  /// 'all' | 'active' | 'inactive', e.g. when opened from a dashboard card.
+  final String initialFilter;
+
+  /// Pushed on its own (with a back button) rather than shown as a tab.
+  final bool standalone;
+
+  const ManageClientsScreen({
+    super.key,
+    this.initialFilter = 'all',
+    this.standalone = false,
+  });
 
   @override
   Widget build(BuildContext context) {
     return ChangeNotifierProvider(
-      create: (_) => ManageUsersViewModel(role: 'client')..loadUsers(),
-      child: const _ManageClientsBody(),
+      create: (_) => ManageUsersViewModel(
+        role: 'client',
+        initialFilter: initialFilter,
+      )..loadAllUsers(),
+      child: _ManageClientsBody(standalone: standalone),
     );
   }
 }
 
 class _ManageClientsBody extends StatelessWidget {
-  const _ManageClientsBody();
+  final bool standalone;
+  const _ManageClientsBody({this.standalone = false});
 
   @override
   Widget build(BuildContext context) {
@@ -35,7 +50,7 @@ class _ManageClientsBody extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Manage Clients'),
-        automaticallyImplyLeading: false,
+        automaticallyImplyLeading: standalone,
       ),
       body: _buildBody(context, vm),
       floatingActionButton: FloatingActionButton(
@@ -100,6 +115,7 @@ class _ManageClientsBody extends StatelessWidget {
       );
     }
 
+    final visible = vm.visibleUsers;
     return NotificationListener<ScrollNotification>(
       onNotification: (scroll) {
         if (scroll.metrics.pixels >= scroll.metrics.maxScrollExtent - 200 &&
@@ -117,15 +133,21 @@ class _ManageClientsBody extends StatelessWidget {
             // Section header
 
             // Stats row
-            _StatsRow(
-              activeCount: vm.activeCount,
-              totalCount: vm.totalCount,
-              inactiveCount: vm.inactiveCount,
-            ),
+            UserListControls(vm: vm, searchHint: 'Search clients by name, address…'),
             const SizedBox(height: 20),
+            if (visible.isEmpty)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 40),
+                child: Center(
+                  child: Text(
+                    'No matches',
+                    style: TextStyle(color: AppTheme.textSecondary),
+                  ),
+                ),
+              ),
             // User cards
-            ...List.generate(vm.users.length + (vm.hasMore ? 1 : 0), (index) {
-              if (index == vm.users.length) {
+            ...List.generate(visible.length + (vm.isLoadingMore ? 1 : 0), (index) {
+              if (index == visible.length) {
                 return const Padding(
                   padding: EdgeInsets.all(16),
                   child: Center(
@@ -134,7 +156,7 @@ class _ManageClientsBody extends StatelessWidget {
                 );
               }
               return _UserCard(
-                user: vm.users[index],
+                user: visible[index],
                 vm: vm,
                 userType: 'Client',
               );
@@ -146,94 +168,6 @@ class _ManageClientsBody extends StatelessWidget {
   }
 }
 
-class _StatsRow extends StatelessWidget {
-  final int activeCount;
-  final int totalCount;
-  final int inactiveCount;
-
-  const _StatsRow({
-    required this.activeCount,
-    required this.totalCount,
-    required this.inactiveCount,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(
-          child: _StatBox(
-            count: activeCount,
-            label: 'Active',
-            color: AppTheme.successColor,
-          ),
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: _StatBox(
-            count: totalCount,
-            label: 'Total',
-            color: AppTheme.textSecondary,
-          ),
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: _StatBox(
-            count: inactiveCount,
-            label: 'Inactive',
-            color: AppTheme.errorColor,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _StatBox extends StatelessWidget {
-  final int count;
-  final String label;
-  final Color color;
-
-  const _StatBox({
-    required this.count,
-    required this.label,
-    required this.color,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.06),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withValues(alpha: 0.12)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            '$count',
-            style: TextStyle(
-              fontSize: 22,
-              fontWeight: FontWeight.w800,
-              color: color,
-            ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w500,
-              color: color.withValues(alpha: 0.8),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
 
 class _UserCard extends StatefulWidget {
   final AppUser user;

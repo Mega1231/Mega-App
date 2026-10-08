@@ -1273,11 +1273,42 @@ class _GroupAssignmentSheetState extends State<_GroupAssignmentSheet> {
   }
 }
 
+/// Edit an assignment's days, dates, time and caregiver from anywhere
+/// (e.g. a day in the client calendar). [changeFrom] is the first day a new
+/// caregiver would take over; it defaults to today.
+Future<void> showEditScheduleSheet(
+  BuildContext context,
+  Assignment assignment, {
+  DateTime? changeFrom,
+}) {
+  return showModalBottomSheet(
+    context: context,
+    isScrollControlled: true,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+    ),
+    builder: (_) => _EditScheduleSheet(
+      assignment: assignment,
+      vm: AssignmentViewModel(),
+      changeFrom: changeFrom,
+      ownsVm: true,
+    ),
+  );
+}
+
 class _EditScheduleSheet extends StatefulWidget {
   final Assignment assignment;
   final AssignmentViewModel vm;
+  final DateTime? changeFrom;
+  // True when the sheet created [vm] itself and must dispose it.
+  final bool ownsVm;
 
-  const _EditScheduleSheet({required this.assignment, required this.vm});
+  const _EditScheduleSheet({
+    required this.assignment,
+    required this.vm,
+    this.changeFrom,
+    this.ownsVm = false,
+  });
 
   @override
   State<_EditScheduleSheet> createState() => _EditScheduleSheetState();
@@ -1291,11 +1322,32 @@ class _EditScheduleSheetState extends State<_EditScheduleSheet> {
   TimeOfDay? _endTime;
   late bool _isLiveIn;
 
+  AppUser? _newCaregiver;
+  late DateTime _changeFrom;
+
   @override
   void initState() {
     super.initState();
     _parseExistingSchedule();
+    final now = DateTime.now();
+    _changeFrom = widget.changeFrom ?? DateTime(now.year, now.month, now.day);
+    widget.vm.addListener(_onVm);
+    if (widget.vm.caregivers.isEmpty) widget.vm.loadDropdownData();
   }
+
+  void _onVm() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void dispose() {
+    widget.vm.removeListener(_onVm);
+    if (widget.ownsVm) widget.vm.dispose();
+    super.dispose();
+  }
+
+  bool get _caregiverChanged =>
+      _newCaregiver != null && _newCaregiver!.uid != widget.assignment.caregiverId;
 
   void _parseExistingSchedule() {
     final schedule = widget.assignment.schedule;
@@ -1371,6 +1423,47 @@ class _EditScheduleSheetState extends State<_EditScheduleSheet> {
                 fontSize: 14,
               ),
             ),
+            const SizedBox(height: 20),
+            DropdownButtonFormField<AppUser>(
+              initialValue: widget.vm.caregivers
+                  .where((c) => c.uid == (_newCaregiver?.uid ?? widget.assignment.caregiverId))
+                  .firstOrNull,
+              isExpanded: true,
+              decoration: InputDecoration(
+                labelText: 'Caregiver',
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              hint: Text(widget.vm.isLoadingDropdowns
+                  ? 'Loading caregivers…'
+                  : widget.assignment.caregiverName),
+              items: [
+                for (final c in widget.vm.caregivers)
+                  DropdownMenuItem(value: c, child: Text(c.fullName)),
+              ],
+              onChanged: (v) => setState(() => _newCaregiver = v),
+            ),
+            if (_caregiverChanged) ...[
+              const SizedBox(height: 10),
+              _DatePickerTile(
+                selectedDate: _changeFrom,
+                onTap: () async {
+                  final picked = await showDatePicker(
+                    context: context,
+                    initialDate: _changeFrom,
+                    firstDate: _earliestScheduleDate(),
+                    lastDate: DateTime.now().add(const Duration(days: 365)),
+                  );
+                  if (picked != null) setState(() => _changeFrom = picked);
+                },
+              ),
+              const SizedBox(height: 4),
+              Text(
+                '${_newCaregiver!.fullName} takes over from this day. Earlier days stay with ${widget.assignment.caregiverName}.',
+                style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary),
+              ),
+            ],
             const SizedBox(height: 20),
             const Text(
               'Visit Days',
@@ -1561,16 +1654,25 @@ class _EditScheduleSheetState extends State<_EditScheduleSheet> {
       endTimeStr = _endTime!.format(context);
     }
 
-    Navigator.pop(context);
-    final success = await widget.vm.updateSchedule(
+    final messenger = Navigator.of(context);
+    var success = await widget.vm.updateSchedule(
       widget.assignment.id,
       schedule,
       shiftStartTime: startTimeStr,
       shiftEndTime: endTimeStr,
       startDate: _startDate,
       endDate: _endDate,
+      isLiveIn: _isLiveIn,
     );
+    // Caregiver change runs after the time/day edit so the new caregiver's
+    // copy carries the updated schedule.
+    if (success && _caregiverChanged) {
+      success = await widget.vm
+          .changeCaregiver(widget.assignment.id, _newCaregiver!, _changeFrom);
+      if (success && !widget.ownsVm) widget.vm.refresh();
+    }
     if (!mounted) return;
+    messenger.pop();
     if (success) {
       CustomSnackbar.success(context: context, message: 'Schedule updated.', showFromTop: true);
     } else {

@@ -6,23 +6,39 @@ import '../../theme/app_theme.dart';
 import '../../viewmodels/manage_users_viewmodel.dart';
 import '../../widgets/custom_loader.dart';
 import '../../widgets/custom_snackbar.dart';
+import '../../widgets/user_list_controls.dart';
+import 'client_schedule_screen.dart';
 import 'create_user_screen.dart';
 import 'edit_user_screen.dart';
 
 class ManageCaregiverScreen extends StatelessWidget {
-  const ManageCaregiverScreen({super.key});
+  /// 'all' | 'active' | 'inactive', e.g. when opened from a dashboard card.
+  final String initialFilter;
+
+  /// Pushed on its own (with a back button) rather than shown as a tab.
+  final bool standalone;
+
+  const ManageCaregiverScreen({
+    super.key,
+    this.initialFilter = 'all',
+    this.standalone = false,
+  });
 
   @override
   Widget build(BuildContext context) {
     return ChangeNotifierProvider(
-      create: (_) => ManageUsersViewModel(role: 'caregiver')..loadUsers(),
-      child: const _ManageCaregiversBody(),
+      create: (_) => ManageUsersViewModel(
+        role: 'caregiver',
+        initialFilter: initialFilter,
+      )..loadAllUsers(),
+      child: _ManageCaregiversBody(standalone: standalone),
     );
   }
 }
 
 class _ManageCaregiversBody extends StatelessWidget {
-  const _ManageCaregiversBody();
+  final bool standalone;
+  const _ManageCaregiversBody({this.standalone = false});
 
   @override
   Widget build(BuildContext context) {
@@ -31,7 +47,7 @@ class _ManageCaregiversBody extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Manage Caregivers'),
-        automaticallyImplyLeading: false,
+        automaticallyImplyLeading: standalone,
       ),
       body: _buildBody(context, vm),
       floatingActionButton: FloatingActionButton(
@@ -96,6 +112,7 @@ class _ManageCaregiversBody extends StatelessWidget {
       );
     }
 
+    final visible = vm.visibleUsers;
     return NotificationListener<ScrollNotification>(
       onNotification: (scroll) {
         if (scroll.metrics.pixels >= scroll.metrics.maxScrollExtent - 200 &&
@@ -113,15 +130,21 @@ class _ManageCaregiversBody extends StatelessWidget {
             // Section header
 
             // Stats row
-            _StatsRow(
-              activeCount: vm.activeCount,
-              totalCount: vm.totalCount,
-              inactiveCount: vm.inactiveCount,
-            ),
+            UserListControls(vm: vm, searchHint: 'Search caregivers by name, phone…'),
             const SizedBox(height: 20),
+            if (visible.isEmpty)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 40),
+                child: Center(
+                  child: Text(
+                    'No matches',
+                    style: TextStyle(color: AppTheme.textSecondary),
+                  ),
+                ),
+              ),
             // User cards
-            ...List.generate(vm.users.length + (vm.hasMore ? 1 : 0), (index) {
-              if (index == vm.users.length) {
+            ...List.generate(visible.length + (vm.isLoadingMore ? 1 : 0), (index) {
+              if (index == visible.length) {
                 return const Padding(
                   padding: EdgeInsets.all(16),
                   child: Center(
@@ -130,7 +153,7 @@ class _ManageCaregiversBody extends StatelessWidget {
                 );
               }
               return _UserCard(
-                user: vm.users[index],
+                user: visible[index],
                 vm: vm,
                 userType: 'Caregiver',
               );
@@ -142,94 +165,6 @@ class _ManageCaregiversBody extends StatelessWidget {
   }
 }
 
-class _StatsRow extends StatelessWidget {
-  final int activeCount;
-  final int totalCount;
-  final int inactiveCount;
-
-  const _StatsRow({
-    required this.activeCount,
-    required this.totalCount,
-    required this.inactiveCount,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(
-          child: _StatBox(
-            count: activeCount,
-            label: 'Active',
-            color: AppTheme.successColor,
-          ),
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: _StatBox(
-            count: totalCount,
-            label: 'Total',
-            color: AppTheme.textSecondary,
-          ),
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: _StatBox(
-            count: inactiveCount,
-            label: 'Inactive',
-            color: AppTheme.errorColor,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _StatBox extends StatelessWidget {
-  final int count;
-  final String label;
-  final Color color;
-
-  const _StatBox({
-    required this.count,
-    required this.label,
-    required this.color,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.06),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withValues(alpha: 0.12)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            '$count',
-            style: TextStyle(
-              fontSize: 22,
-              fontWeight: FontWeight.w800,
-              color: color,
-            ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w500,
-              color: color.withValues(alpha: 0.8),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
 
 class _UserCard extends StatelessWidget {
   final AppUser user;
@@ -413,6 +348,36 @@ class _UserCard extends StatelessWidget {
                 icon: const Icon(Icons.edit, size: 18),
                 label: const Text(
                   'Edit Profile',
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                ),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppTheme.primaryColor,
+                  side: BorderSide(
+                    color: AppTheme.primaryColor.withValues(alpha: 0.3),
+                  ),
+                  backgroundColor:
+                      AppTheme.primaryColor.withValues(alpha: 0.04),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                ),
+              ),
+            ),
+            const SizedBox(height: 10),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) =>
+                        ClientScheduleScreen.forCaregiver(caregiver: user),
+                  ),
+                ),
+                icon: const Icon(Icons.calendar_month, size: 18),
+                label: const Text(
+                  'Schedule',
                   style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
                 ),
                 style: OutlinedButton.styleFrom(
