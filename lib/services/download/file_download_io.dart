@@ -10,3 +10,8 @@ Future<String> saveGeneratedFile(Uint8List bytes, String fileName,
   await file.writeAsBytes(bytes);
   return file.path;
 }
+
+/// Saves [bytes] to the documents folder (mobile has no browser tab).
+Future<void> openFileInBrowser(Uint8List bytes, String fileName,
+        {required String mimeType}) =>
+    saveGeneratedFile(bytes, fileName, mimeType: mimeType);

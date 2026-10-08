@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../theme/app_theme.dart';
 import '../viewmodels/auth_viewmodel.dart';
 import '../widgets/change_password_dialog.dart';
+import 'pages/web_applications_page.dart';
 import 'pages/web_assignments_page.dart';
 import 'pages/web_clock_logs_page.dart';
 import 'pages/web_dashboard_page.dart';
@@ -23,7 +24,8 @@ enum WebSection {
   reports('Shift Reports', Icons.description_outlined),
   weeklyHours('Weekly Hours', Icons.schedule_outlined),
   clockLogs('Clock-In Logs', Icons.login_outlined),
-  messages('Messages', Icons.forum_outlined);
+  messages('Messages', Icons.forum_outlined),
+  applications('Applications', Icons.how_to_reg_outlined);
 
   final String label;
   final IconData icon;
@@ -83,6 +85,8 @@ class _AdminWebShellState extends State<AdminWebShell> {
         return const WebClockLogsPage();
       case WebSection.messages:
         return const WebMessagesPage();
+      case WebSection.applications:
+        return const WebApplicationsPage();
     }
   }
 

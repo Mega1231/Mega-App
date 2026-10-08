@@ -1,10 +1,13 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import 'firebase_options.dart';
 import 'services/notification_service.dart';
 import 'theme/app_theme.dart';
@@ -15,15 +18,24 @@ import 'views/caregiver/caregiver_dashboard.dart';
 import 'views/client/client_dashboard.dart';
 import 'views/family/family_dashboard.dart';
 import 'web/admin_web_shell.dart';
+import 'web/apply/apply_page.dart';
 import 'web/web_login_screen.dart';
 import 'widgets/incoming_call_listener.dart';
+
+/// Local testing only: `--dart-define=USE_EMULATORS=true` points the app at
+/// the Firebase emulators (project demo-mega) instead of production.
+const _useEmulators = bool.fromEnvironment('USE_EMULATORS');
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   // .env holds mobile secrets (Agora App ID, Maps key). The web admin never
   // loads it; its Maps key comes from --dart-define-from-file=.env.web.
   if (!kIsWeb) await dotenv.load(fileName: '.env');
-  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  await Firebase.initializeApp(
+    options: _useEmulators
+        ? DefaultFirebaseOptions.currentPlatform.copyWith(projectId: 'demo-mega')
+        : DefaultFirebaseOptions.currentPlatform,
+  );
 
   // FCM background handler must be registered before runApp
   if (!kIsWeb) {
@@ -38,6 +50,13 @@ void main() async {
     cacheSizeBytes: Settings.CACHE_SIZE_UNLIMITED,
   );
 
+  if (_useEmulators) {
+    FirebaseAuth.instance.useAuthEmulator('127.0.0.1', 9099);
+    FirebaseFirestore.instance.useFirestoreEmulator('127.0.0.1', 8085);
+    FirebaseFunctions.instance.useFunctionsEmulator('127.0.0.1', 5001);
+    await FirebaseStorage.instance.useStorageEmulator('127.0.0.1', 9199);
+  }
+
   // Push and call notifications are mobile-only; the web build is the
   // admin panel.
   if (!kIsWeb) await NotificationService().initialize();
@@ -45,11 +64,35 @@ void main() async {
   runApp(const MegaHomeCareApp());
 }
 
+/// Token from a caregiver application link (`mega-h.web.app/apply/<token>`),
+/// or null. Those links open the public application page instead of the
+/// admin panel, with no login.
+String? get applyLinkToken {
+  if (!kIsWeb) return null;
+  final segments = Uri.base.pathSegments;
+  return segments.length >= 2 && segments[0] == 'apply' && segments[1].isNotEmpty
+      ? segments[1]
+      : null;
+}
+
 class MegaHomeCareApp extends StatelessWidget {
   const MegaHomeCareApp({super.key});
 
   @override
   Widget build(BuildContext context) {
+    final applyToken = applyLinkToken;
+    if (applyToken != null) {
+      return GestureDetector(
+        onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
+        child: MaterialApp(
+          title: 'Mega Homecare – Application',
+          debugShowCheckedModeBanner: false,
+          theme: AppTheme.theme,
+          home: ApplyPage(token: applyToken),
+        ),
+      );
+    }
+
     return ChangeNotifierProvider(
       create: (_) => AuthViewModel()..init(),
       child: GestureDetector(
