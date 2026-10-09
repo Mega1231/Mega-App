@@ -15,6 +15,7 @@ import 'admin_chat_list_screen.dart';
 import 'admin_schedules_screen.dart';
 import 'admin_clock_logs_screen.dart';
 import 'weekly_hours_screen.dart';
+import 'applications_screen.dart';
 import '../common/chat_screen.dart';
 import '../common/profile_screen.dart';
 
@@ -276,6 +277,17 @@ class _AdminHome extends StatelessWidget {
                     context,
                     MaterialPageRoute(
                         builder: (_) => const WeeklyHoursScreen())),
+              ),
+              _buildActionTile(
+                context,
+                'Caregiver Applications',
+                'Send links, review documents, onboard',
+                Icons.how_to_reg,
+                const Color(0xFF2E7D32),
+                () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                        builder: (_) => const ApplicationsScreen())),
               ),
               _buildActionTile(
                 context,

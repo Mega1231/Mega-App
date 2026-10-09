@@ -603,7 +603,9 @@ void webToast(BuildContext context, String message, {bool error = false}) {
     SnackBar(
       content: Text(message),
       behavior: SnackBarBehavior.floating,
-      width: 420,
+      // Also used by shared dialogs in the mobile app, where 420 is wider
+      // than the screen.
+      width: (MediaQuery.of(context).size.width - 32).clamp(0, 420).toDouble(),
       backgroundColor: error ? AppTheme.errorColor : AppTheme.textPrimary,
     ),
   );
