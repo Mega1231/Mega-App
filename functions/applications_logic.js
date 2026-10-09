@@ -135,20 +135,35 @@ function zonedHour(date, timeZone = AGENCY_TIME_ZONE) {
 }
 
 /**
- * Whether an applicant should get a reminder now: still has work to do,
+ * Whether an applicant should get a reminder now: still has work to do
+ * (application or letters),
  * has an email, it's 8 am–10 pm in Toronto, it's been ≥ 4 hours since the
  * invite / last reminder / their last activity, the invite is under
  * 14 days old, and the admin hasn't turned reminders off.
  */
+/**
+ * What the applicant still has to do: "application" (details / documents),
+ * "onboarding" (sign the letters) or null.
+ */
+function reminderPhase(app) {
+  if (OPEN_STATUSES.has(app.status)) return "application";
+  if (app.status === "accepted" && app.onboarding?.status === "sent") {
+    return "onboarding";
+  }
+  return null;
+}
+
 function shouldRemind(app, now = new Date()) {
-  if (!OPEN_STATUSES.has(app.status) || app.remindersOff ||
-      !EMAIL_RE.test(app.email || "")) {
+  const phase = reminderPhase(app);
+  if (!phase || app.remindersOff || !EMAIL_RE.test(app.email || "")) {
     return false;
   }
   const hour = zonedHour(now);
   if (hour < 8 || hour >= 22) return false;
   const ms = (t) => (t?.toDate ? t.toDate() : t ? new Date(t) : null)?.getTime();
-  const created = ms(app.invitedAt || app.createdAt);
+  const created = ms(phase === "onboarding"
+    ? app.onboarding.sentAt
+    : app.invitedAt || app.createdAt);
   if (!created || now.getTime() - created > 14 * 24 * 3600 * 1000) return false;
   const last = Math.max(created, ms(app.lastReminderAt) || 0,
     ms(app.lastApplicantActivityAt) || 0);
@@ -180,5 +195,6 @@ module.exports = {
   submissionProblems,
   safeFileName,
   zonedHour,
+  reminderPhase,
   shouldRemind,
 };

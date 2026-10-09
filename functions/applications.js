@@ -13,6 +13,7 @@ const admin = require("firebase-admin");
 const { FieldValue, Timestamp } = require("firebase-admin/firestore");
 const nodemailer = require("nodemailer");
 const L = require("./applications_logic");
+const O = require("./onboarding_letters");
 
 const SMTP_PASSWORD = defineSecret("SMTP_PASSWORD");
 const SMTP_USER = "megahomecare0@gmail.com";
@@ -91,6 +92,28 @@ function applicantView(app) {
     generalComment: app.status === "needs_changes" ? app.generalComment || "" : "",
     requiredDocuments: L.REQUIRED_DOCUMENTS,
     problems: L.submissionProblems(app),
+    onboarding: applicantOnboarding(app),
+  };
+}
+
+/** Letters to read and sign, once Becky has sent them. */
+function applicantOnboarding(app) {
+  const ob = app.onboarding;
+  if (app.status !== "accepted" || !ob || !["sent", "completed"].includes(ob.status)) {
+    return null;
+  }
+  return {
+    status: ob.status,
+    hasSignature: Boolean(ob.signaturePath),
+    loginCreated: Boolean(app.caregiverUid),
+    copiesEmailed: Boolean(ob.copiesEmailedAt),
+    letters: O.buildLetters(ob.fields).map((l) => ({
+      id: l.id,
+      title: l.title,
+      heading: l.heading,
+      blocks: l.blocks,
+      signedAt: ob.letters?.[l.id]?.signedAt?.toMillis?.() || null,
+    })),
   };
 }
 
@@ -139,6 +162,28 @@ function adminView(id, app) {
     decidedAt: millis(app.decidedAt),
     lastApplicantActivityAt: millis(app.lastApplicantActivityAt),
     problems: L.submissionProblems(app),
+    onboarding: adminOnboarding(app),
+  };
+}
+
+function adminOnboarding(app) {
+  const ob = app.onboarding || {};
+  return {
+    status: ob.status || "not_sent",
+    fields: ob.fields || null,
+    sentAt: millis(ob.sentAt),
+    completedAt: millis(ob.completedAt),
+    letters: O.buildLetters(ob.fields || O.normalizeFields({}).fields).map((l) => ({
+      id: l.id,
+      title: l.title,
+      signedAt: millis(ob.letters?.[l.id]?.signedAt),
+    })),
+    caregiverUid: app.caregiverUid || "",
+    caregiverUsername: app.caregiverUsername || "",
+    defaults: {
+      position: O.DEFAULT_POSITION,
+      jobDescription: O.DEFAULT_JOB_DESCRIPTION,
+    },
   };
 }
 
@@ -153,31 +198,32 @@ function mailer() {
   return transport;
 }
 
-function emailHtml(paragraphs, link) {
+function emailHtml(paragraphs, link, button = "Open my application") {
   const body = paragraphs.map((p) =>
     `<p style="margin:0 0 14px">${p}</p>`).join("");
-  const button = link
+  const action = link
     ? `<p style="margin:22px 0"><a href="${L.escapeHtml(link)}" ` +
       "style=\"background:#1f6feb;color:#fff;padding:12px 22px;" +
       "border-radius:8px;text-decoration:none;font-weight:600\">" +
-      "Open my application</a></p>" +
+      `${L.escapeHtml(button)}</a></p>` +
       `<p style="margin:0 0 14px;font-size:13px;color:#555">Or copy this link: ` +
       `${L.escapeHtml(link)}</p>`
     : "";
   return "<div style=\"font-family:Arial,sans-serif;font-size:15px;" +
-    "color:#222;max-width:560px\">" + body + button +
+    "color:#222;max-width:560px\">" + body + action +
     "<p style=\"margin:22px 0 0\">Thank you,<br>Mega Homecare Inc.</p></div>";
 }
 
 /** Sends an email; returns false (and logs) instead of throwing. */
-async function sendEmail(to, subject, paragraphs, link) {
+async function sendEmail(to, subject, paragraphs, link, button, attachments) {
   if (!L.EMAIL_RE.test(to || "")) return false;
   try {
     await mailer().sendMail({
       from: `"Mega Homecare" <${SMTP_USER}>`,
       to,
       subject,
-      html: emailHtml(paragraphs, link),
+      html: emailHtml(paragraphs, link, button),
+      ...(attachments ? { attachments } : {}),
     });
     return true;
   } catch (e) {
@@ -196,6 +242,25 @@ function inviteEmail(app, token) {
       "You can take photos with your phone camera.",
     "Documents needed: " + L.REQUIRED_DOCUMENTS.map((d) => d.label).join(", ") + ".",
   ], linkFor(token));
+}
+
+function lettersEmail(app, reminder) {
+  const left = O.LETTER_IDS.filter((id) => !app.onboarding?.letters?.[id]?.signedAt)
+    .length;
+  return sendEmail(app.email,
+    reminder
+      ? "Reminder: please sign your Mega Homecare onboarding documents"
+      : "Welcome to Mega Homecare – please sign your onboarding documents",
+    [
+      `Hi ${firstName(app)},`,
+      reminder
+        ? `You still have ${left} onboarding document${left === 1 ? "" : "s"} to sign.`
+        : "Congratulations, your application has been accepted! Please read " +
+          "and sign your 5 onboarding documents: Offer Letter, Welcome Letter, " +
+          "Phone Usage Policy, Shift Report Guidelines and Communication " +
+          "Compliance. You sign with your finger on your phone.",
+    ],
+    linkFor(app.token), "Open my documents");
 }
 
 function missingList(app) {
@@ -403,6 +468,10 @@ exports.applicationList = onCall(async (request) => {
       lastApplicantActivityAt: millis(app.lastApplicantActivityAt),
       reminderCount: app.reminderCount || 0,
       remindersOff: app.remindersOff === true,
+      onboardingStatus: app.onboarding?.status || "not_sent",
+      lettersSigned: O.LETTER_IDS.filter((id) => app.onboarding?.letters?.[id]?.signedAt)
+        .length,
+      loginCreated: Boolean(app.caregiverUid),
     };
   });
 });
@@ -582,7 +651,9 @@ exports.applicationSendEmail = onCall(emailOptions, async (request) => {
     throw new HttpsError("failed-precondition", "This applicant has no email.");
   }
   if (!app.token) throw new HttpsError("failed-precondition", "No link yet.");
-  const emailSent = app.status === "invited"
+  const emailSent = L.reminderPhase(app) === "onboarding"
+    ? await lettersEmail(app, true)
+    : app.status === "invited"
     ? await inviteEmail(app, app.token)
     : await sendEmail(app.email, "Mega Homecare – reminder about your application",
       [`Hi ${firstName(app)},`, missingList(app)], linkFor(app.token));
@@ -695,6 +766,291 @@ exports.applicationGetDocument = onCall(uploadOptions, async (request) => {
   };
 });
 
+// ── Onboarding letters (stage 2) ──
+
+/** The five letters with Becky's fields filled in, before sending. */
+exports.onboardingPreview = onCall(async (request) => {
+  await requireAdmin(request);
+  const { fields, missing } = O.normalizeFields(request.data?.fields);
+  return {
+    missing,
+    letters: O.buildLetters(fields).map((l) => ({
+      id: l.id, title: l.title, heading: l.heading, blocks: l.blocks,
+    })),
+  };
+});
+
+/**
+ * Saves Becky's fields and opens the letters on the applicant's link. Can be
+ * repeated to fix a detail until the first letter is signed.
+ */
+exports.onboardingSend = onCall(emailOptions, async (request) => {
+  const me = await requireAdmin(request);
+  const doc = await loadForAdmin(request.data?.id);
+  const app = doc.data();
+  if (app.status !== "accepted") {
+    throw new HttpsError("failed-precondition", "Accept the application first.");
+  }
+  const signed = O.LETTER_IDS.filter((id) => app.onboarding?.letters?.[id]?.signedAt);
+  if (signed.length > 0) {
+    throw new HttpsError("failed-precondition",
+      "The caregiver has already started signing, so the documents can't be changed.");
+  }
+  const { fields, missing } = O.normalizeFields(request.data?.fields);
+  if (missing.length > 0) {
+    throw new HttpsError("invalid-argument", "Please fill in: " + missing.join(", "));
+  }
+  const resend = app.onboarding?.status === "sent";
+  const onboarding = {
+    status: "sent",
+    fields,
+    letters: {},
+    signaturePath: null,
+    sentAt: now(),
+    sentBy: me.uid,
+  };
+  await doc.ref.update({
+    onboarding,
+    lastReminderAt: null,
+    reminderCount: 0,
+    updatedAt: now(),
+    activity: FieldValue.arrayUnion(log(me.name, resend ? "letters_updated" : "letters_sent")),
+  });
+  const updated = { ...app, onboarding };
+  const emailSent = request.data?.sendEmail !== false && app.email && app.token
+    ? await lettersEmail(updated, false) : false;
+  if (emailSent) await doc.ref.update({ lastReminderAt: now() });
+  return { ...adminView(doc.id, (await doc.ref.get()).data()), emailSent };
+});
+
+const PNG_MAGIC = Buffer.from([0x89, 0x50, 0x4e, 0x47]);
+
+/** The applicant signs one letter (drawing their signature the first time). */
+/** File name for a caregiver's copy, e.g. "Offer_Letter_Grace_Obi.pdf". */
+function signedFileName(letter, fullName) {
+  return `${letter.title}_${fullName || "caregiver"}`.replace(/[^A-Za-z0-9]+/g, "_") + ".pdf";
+}
+
+/** Emails the caregiver a copy of every signed document; false on failure. */
+async function emailSignedCopies(app) {
+  const ob = app.onboarding;
+  if (!app.email) return false;
+  const letters = O.buildLetters(ob.fields);
+  const attachments = [];
+  for (const l of letters) {
+    const path = ob.letters?.[l.id]?.pdfPath;
+    if (!path) continue;
+    const [content] = await bucket().file(path).download();
+    attachments.push({
+      filename: signedFileName(l, ob.fields.fullName),
+      content,
+      contentType: "application/pdf",
+    });
+  }
+  return sendEmail(app.email, "Your signed Mega Homecare onboarding documents", [
+    `Hi ${firstName(app)},`,
+    "Thank you for signing your onboarding documents. A copy of each signed " +
+      "document is attached for your records. You can also download them " +
+      "anytime from your link.",
+    "Mega Homecare will send you your app login soon.",
+  ], linkFor(app.token), "Open my documents", attachments);
+}
+
+exports.onboardingSign = onCall({ ...uploadOptions, ...emailOptions }, async (request) => {
+  const { token, letterId, signature } = request.data || {};
+  const doc = await findByToken(token);
+  const app = doc.data();
+  const ob = app.onboarding;
+  if (app.status !== "accepted" || ob?.status !== "sent") {
+    throw new HttpsError("failed-precondition",
+      ob?.status === "completed"
+        ? "All your documents are already signed."
+        : "Your documents are not ready to sign yet.");
+  }
+  if (!O.LETTER_IDS.includes(letterId)) {
+    throw new HttpsError("invalid-argument", "Unknown document.");
+  }
+  if (ob.letters?.[letterId]?.signedAt) {
+    throw new HttpsError("failed-precondition", "You already signed this document.");
+  }
+  if (request.data?.agree !== true) {
+    throw new HttpsError("invalid-argument", "Please confirm that you have read the document.");
+  }
+
+  let signaturePath = ob.signaturePath;
+  let signatureBytes;
+  if (signature) {
+    signatureBytes = Buffer.from(String(signature), "base64");
+    if (signatureBytes.length < 100 || signatureBytes.length > 500 * 1024 ||
+        !signatureBytes.subarray(0, 4).equals(PNG_MAGIC)) {
+      throw new HttpsError("invalid-argument", "Please draw your signature again.");
+    }
+    signaturePath = `applications/${doc.id}/onboarding/signature_${Date.now()}.png`;
+    await bucket().file(signaturePath).save(signatureBytes,
+      { contentType: "image/png", resumable: false });
+  } else if (signaturePath) {
+    [signatureBytes] = await bucket().file(signaturePath).download();
+  } else {
+    throw new HttpsError("invalid-argument", "Please draw your signature.");
+  }
+
+  const headers = request.rawRequest?.headers || {};
+  const ip = String(headers["x-forwarded-for"] || request.rawRequest?.ip || "")
+    .split(",")[0].trim();
+  const userAgent = String(headers["user-agent"] || "").slice(0, 300);
+  const signedAt = new Date();
+  const letter = O.buildLetters(ob.fields).find((l) => l.id === letterId);
+  const pdf = await O.renderLetterPdf(letter, {
+    name: ob.fields.fullName,
+    signature: signatureBytes,
+    signedAt,
+    audit: ip ? `IP ${ip}` : "",
+  });
+  const pdfPath = `applications/${doc.id}/onboarding/${letterId}_${signedAt.getTime()}.pdf`;
+  await bucket().file(pdfPath).save(pdf,
+    { contentType: "application/pdf", resumable: false });
+
+  await doc.ref.update({
+    [`onboarding.letters.${letterId}`]: {
+      signedAt: Timestamp.fromDate(signedAt), pdfPath, ip, userAgent,
+    },
+    "onboarding.signaturePath": signaturePath,
+    lastApplicantActivityAt: now(),
+    updatedAt: now(),
+  });
+
+  // Last letter: mark onboarding complete and tell the admins.
+  const fresh = (await doc.ref.get()).data();
+  const allSigned = O.LETTER_IDS.every((id) => fresh.onboarding?.letters?.[id]?.signedAt);
+  if (allSigned && fresh.onboarding.status === "sent") {
+    await doc.ref.update({
+      "onboarding.status": "completed",
+      "onboarding.completedAt": now(),
+      activity: FieldValue.arrayUnion(log(ob.fields.fullName, "letters_signed")),
+    });
+    await notifyAdmins("Onboarding documents signed",
+      `${ob.fields.fullName} signed all 5 onboarding documents. You can now create their login.`,
+      { applicationId: doc.id });
+    // Their own copies, for their records. An email failure doesn't undo
+    // the signing; they can still download each document from their link.
+    const emailed = await emailSignedCopies(fresh).catch((e) => {
+      logger.error("Emailing signed copies failed", e);
+      return false;
+    });
+    if (emailed) await doc.ref.update({ "onboarding.copiesEmailedAt": now() });
+  }
+  return applicantView((await doc.ref.get()).data());
+});
+
+/** The applicant downloads their own copy of one signed document. */
+exports.onboardingDownload = onCall(uploadOptions, async (request) => {
+  const doc = await findByToken(request.data?.token);
+  const app = doc.data();
+  const ob = app.onboarding;
+  const letter = ob?.fields &&
+    O.buildLetters(ob.fields).find((l) => l.id === request.data?.letterId);
+  const entry = letter && ob.letters?.[letter.id];
+  if (app.status !== "accepted" || !entry?.pdfPath) {
+    throw new HttpsError("not-found", "This document isn't signed yet.");
+  }
+  const [bytes] = await bucket().file(entry.pdfPath).download();
+  return {
+    fileName: signedFileName(letter, ob.fields.fullName),
+    contentType: "application/pdf",
+    data: bytes.toString("base64"),
+  };
+});
+
+/** One signed letter as a PDF (behind the documents password). */
+exports.onboardingGetLetter = onCall(uploadOptions, async (request) => {
+  const me = await requireAdmin(request);
+  const vault = (await vaultRef().get()).data();
+  if (!vault?.secret ||
+      !L.verifyVaultToken(request.data?.vaultToken, me.uid, vault.secret)) {
+    throw new HttpsError("permission-denied", "vault-locked");
+  }
+  const doc = await loadForAdmin(request.data?.id);
+  const ob = doc.data().onboarding;
+  const entry = ob?.letters?.[request.data?.letterId];
+  if (!entry?.pdfPath) throw new HttpsError("not-found", "This document isn't signed yet.");
+  const [bytes] = await bucket().file(entry.pdfPath).download();
+  const name = (ob.fields.fullName || "caregiver").replace(/[^A-Za-z0-9]+/g, "_");
+  return {
+    fileName: `${request.data.letterId}_${name}.pdf`,
+    contentType: "application/pdf",
+    data: bytes.toString("base64"),
+  };
+});
+
+const USERNAME_RE = /^[a-z0-9._-]{3,30}$/;
+
+/** Creates the caregiver's app login once every letter is signed. */
+exports.onboardingCreateLogin = onCall(async (request) => {
+  const me = await requireAdmin(request);
+  const doc = await loadForAdmin(request.data?.id);
+  const app = doc.data();
+  if (app.onboarding?.status !== "completed") {
+    throw new HttpsError("failed-precondition",
+      "The caregiver has to sign all 5 documents first.");
+  }
+  if (app.caregiverUid) {
+    throw new HttpsError("already-exists",
+      `A login was already created (@${app.caregiverUsername}).`);
+  }
+  const username = String(request.data?.username || "").trim().toLowerCase();
+  const password = String(request.data?.password || "");
+  if (!USERNAME_RE.test(username)) {
+    throw new HttpsError("invalid-argument",
+      "Username: 3–30 characters, letters, numbers, dot, dash or underscore.");
+  }
+  if (password.length < 6) {
+    throw new HttpsError("invalid-argument", "Password must be at least 6 characters.");
+  }
+  const taken = await db().collection("users").where("username", "==", username)
+    .limit(1).get();
+  if (!taken.empty) {
+    throw new HttpsError("already-exists", `Username "${username}" is already taken.`);
+  }
+
+  const d = app.details || {};
+  const fullName = app.onboarding.fields.fullName || app.fullName;
+  let user;
+  try {
+    user = await admin.auth().createUser({
+      email: `${username}@megahomecare.app`,
+      password,
+      displayName: fullName,
+    });
+  } catch (e) {
+    if (e.code === "auth/email-already-exists") {
+      throw new HttpsError("already-exists", `Username "${username}" is already taken.`);
+    }
+    throw new HttpsError("internal", e.message);
+  }
+  const em = d.emergency || {};
+  await db().collection("users").doc(user.uid).set({
+    username,
+    fullName,
+    role: "caregiver",
+    phone: d.phone || "",
+    address: "",
+    emergencyContact: [em.name, em.relation && `(${em.relation})`, em.phone]
+      .filter(Boolean).join(" "),
+    photoUrl: "",
+    isActive: true,
+    createdAt: Timestamp.now(),
+    email: d.email || app.email || "",
+    applicationId: doc.id,
+  });
+  await doc.ref.update({
+    caregiverUid: user.uid,
+    caregiverUsername: username,
+    updatedAt: now(),
+    activity: FieldValue.arrayUnion(log(me.name, "login_created", `@${username}`)),
+  });
+  return { uid: user.uid, username };
+});
+
 // ── Reminders ──
 
 exports.sendApplicationReminders = onSchedule(
@@ -702,11 +1058,20 @@ exports.sendApplicationReminders = onSchedule(
     secrets: [SMTP_PASSWORD] },
   async () => {
     const snap = await apps()
-      .where("status", "in", [...L.OPEN_STATUSES]).get();
+      .where("status", "in", [...L.OPEN_STATUSES, "accepted"]).get();
     const nowDate = new Date();
     for (const doc of snap.docs) {
       const app = doc.data();
       if (!app.token || !L.shouldRemind(app, nowDate)) continue;
+      if (L.reminderPhase(app) === "onboarding") {
+        if (await lettersEmail(app, true)) {
+          await doc.ref.update({
+            lastReminderAt: now(),
+            reminderCount: FieldValue.increment(1),
+          });
+        }
+        continue;
+      }
       const fixing = app.status === "needs_changes";
       const sent = await sendEmail(app.email,
         fixing
