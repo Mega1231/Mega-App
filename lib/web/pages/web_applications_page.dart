@@ -8,7 +8,9 @@ import '../../services/download/file_download.dart';
 import '../../theme/app_theme.dart';
 import '../admin_web_shell.dart';
 import '../web_widgets.dart';
+import '../../widgets/comment_dialog.dart';
 import 'web_documents_vault.dart';
+import 'web_onboarding_card.dart';
 
 /// Caregiver applications (onboarding stage 1): send a link, follow
 /// progress, review each document, request changes, accept or reject.
@@ -57,7 +59,7 @@ class _WebApplicationsPageState extends State<WebApplicationsPage> {
 
   bool _matchesFilter(ApplicationSummary a, int f) => switch (f) {
     1 => a.status == ApplicationStatus.submitted,
-    2 => ApplicationStatus.open.contains(a.status),
+    2 => a.applicantHasWork,
     3 => a.status == ApplicationStatus.accepted,
     4 => a.status == ApplicationStatus.rejected,
     _ => true,
@@ -177,7 +179,7 @@ class _WebApplicationsPageState extends State<WebApplicationsPage> {
                       name: a.fullName,
                       sub: a.email.isEmpty ? a.phone : a.email,
                     ),
-                    _StatusBadge(status: a.status),
+                    _StatusBadge(status: a.status, summary: a),
                     _DocsProgress(app: a),
                     Text(
                       _ago(a.lastApplicantActivityAt ?? a.createdAt),
@@ -189,8 +191,7 @@ class _WebApplicationsPageState extends State<WebApplicationsPage> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.end,
                       children: [
-                        if (a.link.isNotEmpty &&
-                            ApplicationStatus.open.contains(a.status))
+                        if (a.link.isNotEmpty && a.applicantHasWork)
                           _ShareButton(
                             name: a.fullName,
                             link: a.link,
@@ -396,7 +397,7 @@ class _ApplicationDetailState extends State<_ApplicationDetail> {
     final (title, message, label, destructive) = switch (decision) {
       'accept' => (
         'Accept ${app.fullName}?',
-        'Their application will be marked accepted. Next comes the onboarding letters.',
+        'Their application will be marked accepted. Next come the onboarding documents.',
         'Accept',
         false,
       ),
@@ -574,8 +575,7 @@ class _ApplicationDetailState extends State<_ApplicationDetail> {
                   'created ${DateFormat('MMM d, y').format(app.createdAt!)}',
               ].join(' · '),
               actions: [
-                if (app.link.isNotEmpty &&
-                    ApplicationStatus.open.contains(app.status))
+                if (app.link.isNotEmpty && app.applicantHasWork)
                   _ShareButton(
                     name: app.fullName,
                     link: app.link,
@@ -586,13 +586,12 @@ class _ApplicationDetailState extends State<_ApplicationDetail> {
                   tooltip: 'More',
                   onSelected: _menu,
                   itemBuilder: (_) => [
-                    if (ApplicationStatus.open.contains(app.status) &&
-                        app.email.isNotEmpty)
+                    if (app.applicantHasWork && app.email.isNotEmpty)
                       const PopupMenuItem(
                         value: 'remind',
                         child: Text('Send reminder email now'),
                       ),
-                    if (ApplicationStatus.open.contains(app.status))
+                    if (app.applicantHasWork)
                       PopupMenuItem(
                         value: 'reminders',
                         child: Text(
@@ -627,7 +626,21 @@ class _ApplicationDetailState extends State<_ApplicationDetail> {
             ),
             LayoutBuilder(
               builder: (context, c) {
-                final documents = _documentsCard(app);
+                final documents = app.status == ApplicationStatus.accepted
+                    ? Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          OnboardingCard(
+                            app: app,
+                            onUpdated: (updated) =>
+                                setState(() => _app = updated),
+                            onReload: _load,
+                          ),
+                          const SizedBox(height: 16),
+                          _documentsCard(app),
+                        ],
+                      )
+                    : _documentsCard(app);
                 final side = Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
@@ -898,7 +911,7 @@ class _ApplicationDetailState extends State<_ApplicationDetail> {
           if (closed) ...[
             Text(
               app.status == ApplicationStatus.accepted
-                  ? 'Accepted. Onboarding letters are the next step.'
+                  ? 'Accepted. Onboarding documents are the next step.'
                   : 'Rejected. The applicant\'s link is closed.',
               style: const TextStyle(fontSize: 14),
             ),
@@ -1141,44 +1154,14 @@ Future<String?> _askComment(
   required String hint,
   required String confirm,
   String initial = '',
-}) {
-  final controller = TextEditingController(text: initial);
-  return showDialog<String>(
-    context: context,
-    builder: (ctx) => AlertDialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-      title: Text(title),
-      content: SizedBox(
-        width: 440,
-        child: TextField(
-          controller: controller,
-          autofocus: true,
-          minLines: 3,
-          maxLines: 6,
-          decoration: InputDecoration(
-            hintText: hint,
-            helperText:
-                'The applicant sees this on their page and in the email.',
-          ),
-        ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(ctx),
-          child: const Text('Cancel'),
-        ),
-        FilledButton(
-          style: FilledButton.styleFrom(backgroundColor: AppTheme.warningColor),
-          onPressed: () {
-            final text = controller.text.trim();
-            if (text.isNotEmpty) Navigator.pop(ctx, text);
-          },
-          child: Text(confirm),
-        ),
-      ],
-    ),
-  ).whenComplete(controller.dispose);
-}
+}) => showCommentDialog(
+  context,
+  title: title,
+  confirmLabel: confirm,
+  hint: hint,
+  helper: 'The applicant sees this on their page and in the email.',
+  initial: initial,
+);
 
 String _shareText(String name, String link) {
   final first = name.trim().split(RegExp(r'\s+')).first;
@@ -1193,10 +1176,29 @@ Future<void> _copyLink(BuildContext context, String link) async {
 
 class _StatusBadge extends StatelessWidget {
   final String status;
-  const _StatusBadge({required this.status});
+  final ApplicationSummary? summary;
+  const _StatusBadge({required this.status, this.summary});
 
   @override
   Widget build(BuildContext context) {
+    final s = summary;
+    if (status == ApplicationStatus.accepted && s != null) {
+      // Accepted rows show where onboarding stands.
+      final (label, color) = s.loginCreated
+          ? ('Login created', AppTheme.successColor)
+          : switch (s.onboardingStatus) {
+              OnboardingStatus.completed => (
+                'Documents signed',
+                AppTheme.successColor,
+              ),
+              OnboardingStatus.sent => (
+                'Signing ${s.lettersSigned}/5',
+                AppTheme.primaryColor,
+              ),
+              _ => ('Accepted · send documents', AppTheme.warningColor),
+            };
+      return WebStatusBadge(label: label, color: color);
+    }
     final color = switch (status) {
       ApplicationStatus.submitted => AppTheme.primaryColor,
       ApplicationStatus.needsChanges => AppTheme.warningColor,

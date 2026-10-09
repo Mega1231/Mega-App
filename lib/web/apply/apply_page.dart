@@ -5,6 +5,7 @@ import 'package:image_picker/image_picker.dart';
 import '../../models/caregiver_application.dart';
 import '../../services/application_service.dart';
 import '../../theme/app_theme.dart';
+import 'onboarding_section.dart';
 
 /// Public page an applicant opens from the link Becky sends
 /// (`mega-h.web.app/apply/<token>`). No login: the token identifies the
@@ -301,7 +302,14 @@ class _ApplyPageState extends State<ApplyPage> {
             children: [
               _header(app),
               const SizedBox(height: 16),
-              ..._statusBanner(app),
+              if (app.onboarding != null)
+                OnboardingSection(
+                  token: widget.token,
+                  app: app,
+                  onUpdated: (updated) => setState(() => _app = updated),
+                )
+              else
+                ..._statusBanner(app),
               // When changes were requested, the documents to fix come
               // first instead of below the long details form.
               if (app.isOpen &&
@@ -410,7 +418,7 @@ class _ApplyPageState extends State<ApplyPage> {
             Icons.verified,
             AppTheme.successColor,
             'Your application was accepted',
-            'Welcome to Mega Homecare! We will send your onboarding letters to sign soon.',
+            'Welcome to Mega Homecare! We will send your onboarding documents to sign soon.',
           ),
         ];
       case ApplicationStatus.rejected:

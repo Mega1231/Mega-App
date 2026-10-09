@@ -77,6 +77,39 @@ class ApplicationService {
         await _call('applicationSubmit', {'token': token}),
       );
 
+  /// Signs one onboarding letter. [signaturePng] is needed the first time;
+  /// later letters reuse the saved signature.
+  Future<ApplicantApplication> signLetter(
+    String token, {
+    required String letterId,
+    Uint8List? signaturePng,
+  }) async =>
+      ApplicantApplication.fromMap(await _call(
+        'onboardingSign',
+        {
+          'token': token,
+          'letterId': letterId,
+          'agree': true,
+          if (signaturePng != null) 'signature': base64Encode(signaturePng),
+        },
+        timeout: const Duration(minutes: 2),
+      ));
+
+  /// The applicant's own copy of one signed onboarding document.
+  Future<({String fileName, String contentType, Uint8List bytes})>
+      downloadSignedDocument(String token, String letterId) async {
+    final r = Map<String, dynamic>.from(await _call(
+      'onboardingDownload',
+      {'token': token, 'letterId': letterId},
+      timeout: const Duration(minutes: 2),
+    ));
+    return (
+      fileName: r['fileName'] as String,
+      contentType: r['contentType'] as String,
+      bytes: base64Decode(r['data'] as String),
+    );
+  }
+
   // ── Admin ──
 
   /// Returns the new application's id, link and whether the invite email
@@ -182,6 +215,70 @@ class ApplicationService {
   }
 
   Future<void> delete(String id) => _call('applicationDelete', {'id': id});
+
+  // ── Onboarding letters ──
+
+  /// The five letters filled in with [fields], plus what's still missing.
+  Future<({List<OnboardingLetter> letters, List<String> missing})>
+      previewLetters(OnboardingFields fields) async {
+    final r = Map<String, dynamic>.from(
+        await _call('onboardingPreview', {'fields': fields.toMap()}));
+    return (
+      letters:
+          (r['letters'] as List).map(OnboardingLetter.fromMap).toList(),
+      missing: (r['missing'] as List).map((e) => e.toString()).toList(),
+    );
+  }
+
+  Future<({ApplicationRecord app, bool emailSent})> sendLetters(
+    ApplicationRecord app,
+    OnboardingFields fields, {
+    required bool sendEmail,
+  }) async {
+    final r = Map<String, dynamic>.from(await _call('onboardingSend', {
+      'id': app.id,
+      'fields': fields.toMap(),
+      'sendEmail': sendEmail,
+    }));
+    return (
+      app: ApplicationRecord.fromMap(r,
+          fallbackDocuments: app.requiredDocuments),
+      emailSent: r['emailSent'] == true,
+    );
+  }
+
+  /// One signed letter as a PDF. Throws [VaultLockedException] when the
+  /// vault needs unlocking.
+  Future<({String fileName, String contentType, Uint8List bytes})>
+      getSignedLetter(String id, String letterId) async {
+    if (vaultToken == null) throw const VaultLockedException();
+    try {
+      final r = Map<String, dynamic>.from(await _call(
+        'onboardingGetLetter',
+        {'id': id, 'letterId': letterId, 'vaultToken': vaultToken},
+        timeout: const Duration(minutes: 2),
+      ));
+      return (
+        fileName: r['fileName'] as String,
+        contentType: r['contentType'] as String,
+        bytes: base64Decode(r['data'] as String),
+      );
+    } on FirebaseFunctionsException catch (e) {
+      if (e.message == 'vault-locked') {
+        vaultToken = null;
+        throw const VaultLockedException();
+      }
+      rethrow;
+    }
+  }
+
+  /// Creates the caregiver's app login; returns the username.
+  Future<String> createLogin(String id,
+      {required String username, required String password}) async {
+    final r = Map<String, dynamic>.from(await _call('onboardingCreateLogin',
+        {'id': id, 'username': username, 'password': password}));
+    return r['username'] as String;
+  }
 
   // ── Documents vault ──
 

@@ -22,8 +22,10 @@ import 'web/apply/apply_page.dart';
 import 'web/web_login_screen.dart';
 import 'widgets/incoming_call_listener.dart';
 
-/// Local testing only: `--dart-define=USE_EMULATORS=true` points the app at
-/// the Firebase emulators (project demo-mega) instead of production.
+/// Local web testing only: `--dart-define=USE_EMULATORS=true` points the web
+/// build at the Firebase emulators (project demo-mega) instead of production.
+/// Not for Android: its default app is set up natively from
+/// google-services.json, so the demo project id doesn't take effect there.
 const _useEmulators = bool.fromEnvironment('USE_EMULATORS');
 
 void main() async {

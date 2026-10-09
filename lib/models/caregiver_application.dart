@@ -236,6 +236,10 @@ class ActivityEntry {
     'rejected' => 'Rejected',
     'reopened' => 'Re-opened for review',
     'new_link' => 'New link created',
+    'letters_sent' => 'Onboarding documents sent',
+    'letters_updated' => 'Onboarding documents updated',
+    'letters_signed' => 'All documents signed',
+    'login_created' => 'App login created',
     _ => action,
   };
 }
@@ -250,6 +254,7 @@ class ApplicantApplication {
   final String generalComment;
   final List<RequiredDocument> requiredDocuments;
   final List<String> problems;
+  final ApplicantOnboarding? onboarding;
 
   const ApplicantApplication({
     required this.fullName,
@@ -260,6 +265,7 @@ class ApplicantApplication {
     required this.generalComment,
     required this.requiredDocuments,
     required this.problems,
+    this.onboarding,
   });
 
   bool get isOpen => ApplicationStatus.open.contains(status);
@@ -282,6 +288,197 @@ class ApplicantApplication {
           .map((d) => RequiredDocument.fromMap(_map(d)))
           .toList(),
       problems: (m['problems'] as List? ?? const []).map(_str).toList(),
+      onboarding: m['onboarding'] == null
+          ? null
+          : ApplicantOnboarding.fromMap(m['onboarding']),
+    );
+  }
+}
+
+/// One rendered piece of a letter (see functions/onboarding_letters.js):
+/// h heading, p paragraph, pb bold paragraph, li bullet, kv label + value,
+/// quote highlighted example, note centred emphasis, link.
+class LetterBlock {
+  final String type;
+  final String text;
+  final String label;
+  final String value;
+
+  const LetterBlock({
+    required this.type,
+    this.text = '',
+    this.label = '',
+    this.value = '',
+  });
+
+  factory LetterBlock.fromMap(dynamic v) {
+    final m = _map(v);
+    return LetterBlock(
+      type: _str(m['t']),
+      text: _str(m['text']),
+      label: _str(m['label']),
+      value: _str(m['value']),
+    );
+  }
+}
+
+class OnboardingLetter {
+  final String id;
+  final String title;
+  final String heading;
+  final List<LetterBlock> blocks;
+  final DateTime? signedAt;
+
+  const OnboardingLetter({
+    required this.id,
+    required this.title,
+    this.heading = '',
+    this.blocks = const [],
+    this.signedAt,
+  });
+
+  bool get isSigned => signedAt != null;
+
+  factory OnboardingLetter.fromMap(dynamic v) {
+    final m = _map(v);
+    return OnboardingLetter(
+      id: _str(m['id']),
+      title: _str(m['title']),
+      heading: _str(m['heading']),
+      blocks: (m['blocks'] as List? ?? const [])
+          .map(LetterBlock.fromMap)
+          .toList(),
+      signedAt: _date(m['signedAt']),
+    );
+  }
+}
+
+class OnboardingStatus {
+  static const notSent = 'not_sent';
+  static const sent = 'sent';
+  static const completed = 'completed';
+}
+
+/// The applicant's letters to read and sign.
+class ApplicantOnboarding {
+  final String status;
+  final bool hasSignature;
+  final bool loginCreated;
+  final bool copiesEmailed;
+  final List<OnboardingLetter> letters;
+
+  const ApplicantOnboarding({
+    required this.status,
+    required this.hasSignature,
+    required this.loginCreated,
+    this.copiesEmailed = false,
+    required this.letters,
+  });
+
+  int get signedCount => letters.where((l) => l.isSigned).length;
+
+  factory ApplicantOnboarding.fromMap(dynamic v) {
+    final m = _map(v);
+    return ApplicantOnboarding(
+      status: _str(m['status']),
+      hasSignature: m['hasSignature'] == true,
+      loginCreated: m['loginCreated'] == true,
+      copiesEmailed: m['copiesEmailed'] == true,
+      letters: (m['letters'] as List? ?? const [])
+          .map(OnboardingLetter.fromMap)
+          .toList(),
+    );
+  }
+}
+
+/// What Becky fills in when sending the letters.
+class OnboardingFields {
+  final String fullName;
+  final String position;
+  final String payRate;
+  final String schedule;
+  final String startDate;
+  final String jobDescription;
+
+  const OnboardingFields({
+    required this.fullName,
+    required this.position,
+    required this.payRate,
+    required this.schedule,
+    required this.startDate,
+    required this.jobDescription,
+  });
+
+  factory OnboardingFields.fromMap(dynamic v) {
+    final m = _map(v);
+    return OnboardingFields(
+      fullName: _str(m['fullName']),
+      position: _str(m['position']),
+      payRate: _str(m['payRate']),
+      schedule: _str(m['schedule']),
+      startDate: _str(m['startDate']),
+      jobDescription: _str(m['jobDescription']),
+    );
+  }
+
+  Map<String, dynamic> toMap() => {
+    'fullName': fullName,
+    'position': position,
+    'payRate': payRate,
+    'schedule': schedule,
+    'startDate': startDate,
+    'jobDescription': jobDescription,
+  };
+}
+
+/// Onboarding as the admin sees it.
+class AdminOnboarding {
+  final String status;
+  final OnboardingFields? fields;
+  final DateTime? sentAt;
+  final DateTime? completedAt;
+  final List<OnboardingLetter> letters;
+  final String caregiverUid;
+  final String caregiverUsername;
+  final String defaultPosition;
+  final String defaultJobDescription;
+
+  const AdminOnboarding({
+    this.status = OnboardingStatus.notSent,
+    this.fields,
+    this.sentAt,
+    this.completedAt,
+    this.letters = const [],
+    this.caregiverUid = '',
+    this.caregiverUsername = '',
+    this.defaultPosition = 'Caregiver',
+    this.defaultJobDescription = '',
+  });
+
+  int get signedCount => letters.where((l) => l.isSigned).length;
+  bool get loginCreated => caregiverUid.isNotEmpty;
+
+  factory AdminOnboarding.fromMap(dynamic v) {
+    final m = _map(v);
+    final defaults = _map(m['defaults']);
+    return AdminOnboarding(
+      status: _str(m['status']).isEmpty
+          ? OnboardingStatus.notSent
+          : _str(m['status']),
+      fields: m['fields'] == null
+          ? null
+          : OnboardingFields.fromMap(m['fields']),
+      sentAt: _date(m['sentAt']),
+      completedAt: _date(m['completedAt']),
+      letters: (m['letters'] as List? ?? const [])
+          .map(OnboardingLetter.fromMap)
+          .toList(),
+      caregiverUid: _str(m['caregiverUid']),
+      caregiverUsername: _str(m['caregiverUsername']),
+      defaultPosition: _str(defaults['position']).isEmpty
+          ? 'Caregiver'
+          : _str(defaults['position']),
+      defaultJobDescription: _str(defaults['jobDescription']),
     );
   }
 }
@@ -303,6 +500,9 @@ class ApplicationSummary {
   final DateTime? lastApplicantActivityAt;
   final int reminderCount;
   final bool remindersOff;
+  final String onboardingStatus;
+  final int lettersSigned;
+  final bool loginCreated;
 
   const ApplicationSummary({
     required this.id,
@@ -320,7 +520,16 @@ class ApplicationSummary {
     this.lastApplicantActivityAt,
     required this.reminderCount,
     required this.remindersOff,
+    this.onboardingStatus = OnboardingStatus.notSent,
+    this.lettersSigned = 0,
+    this.loginCreated = false,
   });
+
+  /// Same as [ApplicationRecord.applicantHasWork].
+  bool get applicantHasWork =>
+      ApplicationStatus.open.contains(status) ||
+      (status == ApplicationStatus.accepted &&
+          onboardingStatus == OnboardingStatus.sent);
 
   factory ApplicationSummary.fromMap(dynamic v) {
     final m = _map(v);
@@ -341,6 +550,11 @@ class ApplicationSummary {
       lastApplicantActivityAt: _date(m['lastApplicantActivityAt']),
       reminderCount: n('reminderCount'),
       remindersOff: m['remindersOff'] == true,
+      onboardingStatus: _str(m['onboardingStatus']).isEmpty
+          ? OnboardingStatus.notSent
+          : _str(m['onboardingStatus']),
+      lettersSigned: n('lettersSigned'),
+      loginCreated: m['loginCreated'] == true,
     );
   }
 }
@@ -364,6 +578,7 @@ class ApplicationRecord {
   final DateTime? lastApplicantActivityAt;
   final List<String> problems;
   final List<RequiredDocument> requiredDocuments;
+  final AdminOnboarding onboarding;
 
   const ApplicationRecord({
     required this.id,
@@ -383,10 +598,18 @@ class ApplicationRecord {
     this.lastApplicantActivityAt,
     required this.problems,
     required this.requiredDocuments,
+    this.onboarding = const AdminOnboarding(),
   });
 
   ApplicationDocument doc(String id) =>
       documents[id] ?? const ApplicationDocument();
+
+  /// The applicant still has something to do on their link (details,
+  /// documents or signing letters), so sharing and reminders apply.
+  bool get applicantHasWork =>
+      ApplicationStatus.open.contains(status) ||
+      (status == ApplicationStatus.accepted &&
+          onboarding.status == OnboardingStatus.sent);
 
   bool get allApproved =>
       requiredDocuments.every((d) => doc(d.id).status == DocStatus.approved);
@@ -425,6 +648,7 @@ class ApplicationRecord {
       lastApplicantActivityAt: _date(m['lastApplicantActivityAt']),
       problems: (m['problems'] as List? ?? const []).map(_str).toList(),
       requiredDocuments: required,
+      onboarding: AdminOnboarding.fromMap(m['onboarding']),
     );
   }
 }
